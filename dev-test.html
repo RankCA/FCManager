@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FC Manager - Engine Tests</title>
+<style>
+  body { background:#0e1117; color:#dfe6f0; font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; padding:20px; }
+  h2 { color:#4ade80; font-size:14px; margin:22px 0 8px; border-bottom:1px solid #263041; padding-bottom:5px; }
+  .ok { color:#4ade80; } .bad { color:#f87171; } .warn { color:#fbbf24; } .dim { color:#7b8797; }
+  pre { margin:3px 0; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<div id="out">Running…</div>
+
+<script>
+// Cache-bust every module so edits are always picked up on reload.
+(function () {
+  var v = '?v=' + Date.now();
+  ['js/core/version.js', 'js/core/rng.js', 'js/core/util.js', 'js/core/names.js',
+   'js/engine/player.js', 'js/engine/tactics.js', 'js/engine/match.js',
+   'js/data/db-clubs.js', 'js/data/db-nations.js', 'js/data/db-names.js',
+   'js/data/db-players.js', 'js/engine/db.js']
+    .forEach(function (f) { document.write('<script src="' + f + v + '"><\/script>'); });
+})();
+</script>
+<script>
+const out = document.getElementById('out');
+out.innerHTML = '';
+function log(s, cls) {
+  const p = document.createElement('pre');
+  if (cls) p.className = cls;
+  p.textContent = s;
+  out.appendChild(p);
+}
+function h2(s) { const e = document.createElement('h2'); e.textContent = s; out.appendChild(e); }
+let fails = 0;
+function assert(cond, label, detail) {
+  if (cond) log('  PASS  ' + label + (detail ? '   ' + detail : ''), 'ok');
+  else { fails++; log('  FAIL  ' + label + (detail ? '   ' + detail : ''), 'bad'); }
+}
+
+const U = FCM.U, P = FCM.P, T = FCM.T, M = FCM.M;
+
+try {
+// ---------------------------------------------------------------- data
+h2('1. Data integrity');
+const rng = new FCM.RNG(12345);
+const t0 = performance.now();
+const DB = FCM.DB.build(rng, 2025);
+const buildMs = performance.now() - t0;
+log(`  built in ${buildMs.toFixed(0)}ms`, 'dim');
+assert(DB.players.length > 10000, 'players loaded', DB.players.length);
+assert(DB.clubs.length === 400, 'clubs loaded', DB.clubs.length);
+assert(DB.leagues.length === 22, 'leagues loaded', DB.leagues.length);
+assert(buildMs < 3000, 'build under 3s', buildMs.toFixed(0) + 'ms');
+
+const salah = DB.players.find(p => p.name === 'M. Salah');
+assert(salah && salah.ovr === 91, 'Salah is 91 rated', salah ? 'ovr=' + salah.ovr : 'missing');
+assert(salah && salah.value > 50e6, 'Salah value realistic', salah ? U.money(salah.value) : '');
+
+const empties = DB.clubs.filter(c => c.squad.length < 11);
+assert(empties.length === 0, 'every club has 11+ players',
+  empties.length ? empties.slice(0,3).map(c=>c.name+':'+c.squad.length).join(', ') : 'all ok');
+
+const badPos = DB.players.filter(p => !p.pos.length);
+assert(badPos.length === 0, 'every player has a position', badPos.length + ' bad');
+
+// value anchoring should reproduce real values closely
+let anchorErr = 0, n = 0;
+DB.players.forEach(p => {
+  if (p.value > 0) { const before = p.value; P.recalcValue(p); anchorErr += Math.abs(p.value-before)/before; n++; }
+});
+assert(anchorErr/n < 0.25, 'value model reproduces real values', 'mean drift ' + ((anchorErr/n)*100).toFixed(1) + '%');
+
+// ------------------------------------------------------------ tactics
+h2('2. Tactics & line-up selection');
+const liv = DB.clubs.find(c => c.name === 'Liverpool');
+const bur = DB.clubs.find(c => c.name === 'Burnley');
+assert(!!liv && !!bur, 'test clubs found');
+
+let formationsOk = true, formationDetail = '';
+T.FORMATION_NAMES.forEach(f => {
+  if (T.FORMATIONS[f].length !== 11) { formationsOk = false; formationDetail += f + '=' + T.FORMATIONS[f].length + ' '; }
+  const gks = T.FORMATIONS[f].filter(s => s.pos === 'GK').length;
+  if (gks !== 1) { formationsOk = false; formationDetail += f + ' gk=' + gks + ' '; }
+});
+assert(formationsOk, T.FORMATION_NAMES.length + ' formations have 11 slots & 1 GK', formationDetail);
+
+const livSquad = FCM.DB.squadOf(liv);
+const picked = T.autoPick(livSquad, '4-3-3');
+assert(picked.lineup.filter(Boolean).length === 11, 'auto-pick fills 11', picked.lineup.filter(Boolean).length);
+assert(new Set(picked.lineup).size === 11, 'no duplicate players in XI');
+const pickedGK = FCM.DB.byId[picked.lineup[0]];
+assert(pickedGK && pickedGK.pos[0] === 'GK', 'a real keeper starts in goal', pickedGK ? pickedGK.name+' ('+pickedGK.pos.join(',')+')' : '');
+assert(picked.subs.length >= 7, 'bench filled', picked.subs.length);
+assert(picked.subs.some(id => FCM.DB.byId[id].pos[0] === 'GK'), 'backup keeper on bench');
+
+const xi = picked.lineup.map(id => FCM.DB.byId[id]);
+log('  Liverpool 4-3-3: ' + T.FORMATIONS['4-3-3'].map((s,i)=>s.pos+' '+xi[i].name).join(', '), 'dim');
+const tac = T.defaultTactics(); tac.formation='4-3-3'; tac.lineup=picked.lineup; tac.subs=picked.subs;
+log('  XI strength: ' + T.lineupStrength(tac, FCM.DB.byId), 'dim');
+
+// out-of-position penalty sanity
+const cb = livSquad.find(p => p.pos[0] === 'CB');
+assert(P.overallAt(cb,'CB') > P.overallAt(cb,'ST'), 'CB worse as ST',
+  cb.name + ' CB=' + P.overallAt(cb,'CB') + ' ST=' + P.overallAt(cb,'ST'));
+
+// ------------------------------------------------------------- match
+h2('3. Match engine (2000 sims: Liverpool vs Burnley)');
+function mkTactics(club, form) {
+  const sq = FCM.DB.squadOf(club);
+  const pk = T.autoPick(sq, form);
+  const t = T.defaultTactics();
+  t.formation = form; t.lineup = pk.lineup; t.subs = pk.subs;
+  return t;
+}
+const hT = mkTactics(liv,'4-3-3'), aT = mkTactics(bur,'4-4-2');
+
+let hg=0, ag=0, hw=0, d=0, aw=0, shots=0, ot=0, yellows=0, reds=0, games=2000;
+const scoreline = {};
+const mt0 = performance.now();
+for (let i=0;i<games;i++) {
+  const r = M.play(liv,bur,hT,aT,FCM.DB.byId,{rng:new FCM.RNG(i*7+1)});
+  hg+=r.homeGoals; ag+=r.awayGoals; shots+=r.stats.shots[0]+r.stats.shots[1];
+  ot+=r.stats.onTarget[0]+r.stats.onTarget[1];
+  r.events.forEach(e=>{ if(e.type==='yellow')yellows++; if(e.type==='red')reds++; });
+  if (r.homeGoals>r.awayGoals) hw++; else if (r.homeGoals===r.awayGoals) d++; else aw++;
+  const k = r.homeGoals+'-'+r.awayGoals; scoreline[k]=(scoreline[k]||0)+1;
+}
+const simMs = performance.now()-mt0;
+const gpg = (hg+ag)/games;
+log(`  ${games} matches in ${simMs.toFixed(0)}ms  (${(simMs/games).toFixed(2)}ms each)`, 'dim');
+log(`  Liverpool ${(hg/games).toFixed(2)} - ${(ag/games).toFixed(2)} Burnley   W${hw} D${d} L${aw}`, 'dim');
+log('  common scores: ' + Object.entries(scoreline).sort((a,b)=>b[1]-a[1]).slice(0,6)
+     .map(([k,v])=>k+' ('+(v/games*100).toFixed(0)+'%)').join('  '), 'dim');
+
+assert(gpg > 2.0 && gpg < 4.2, 'goals per game realistic', gpg.toFixed(2));
+assert(hw/games > 0.45 && hw/games < 0.88, 'favourite wins often but not always', (hw/games*100).toFixed(0)+'%');
+assert(d/games > 0.06, 'draws happen', (d/games*100).toFixed(0)+'%');
+assert(aw/games > 0.02, 'upsets happen', (aw/games*100).toFixed(0)+'%');
+const shotsPg = shots/games/2, otPg = ot/games/2;
+assert(shotsPg>6 && shotsPg<22, 'shots per team per game', shotsPg.toFixed(1));
+assert(otPg>2 && otPg<9, 'shots on target per team', otPg.toFixed(1));
+assert(yellows/games>1.0 && yellows/games<7, 'yellows per game', (yellows/games).toFixed(2));
+assert(reds/games<0.35, 'reds are rare', (reds/games).toFixed(3));
+assert(simMs/games < 12, 'sim fast enough for full seasons', (simMs/games).toFixed(2)+'ms');
+
+// even match should be near 50/50
+h2('4. Match engine balance (evenly matched sides)');
+const ars = DB.clubs.find(c=>c.name==='Arsenal'), mci = DB.clubs.find(c=>c.name==='Manchester City');
+const aT2 = mkTactics(ars,'4-3-3'), mT2 = mkTactics(mci,'4-3-3');
+let h2w=0,h2d=0,h2l=0,h2g=0,a2g=0;
+for (let i=0;i<1500;i++){
+  const r=M.play(ars,mci,aT2,mT2,FCM.DB.byId,{rng:new FCM.RNG(i*13+5)});
+  h2g+=r.homeGoals; a2g+=r.awayGoals;
+  if(r.homeGoals>r.awayGoals)h2w++; else if(r.homeGoals===r.awayGoals)h2d++; else h2l++;
+}
+log(`  Arsenal ${(h2g/1500).toFixed(2)} - ${(a2g/1500).toFixed(2)} Man City   W${h2w} D${h2d} L${h2l}`, 'dim');
+assert(h2w>h2l, 'home advantage exists', `${h2w} vs ${h2l}`);
+assert(h2w/1500 < 0.62, 'home advantage not overwhelming', (h2w/1500*100).toFixed(0)+'%');
+
+// ratings & events consistency
+h2('5. Ratings, events & stat consistency');
+const r1 = M.play(liv,bur,hT,aT,FCM.DB.byId,{rng:new FCM.RNG(99)});
+assert(r1.homeRatings.length>=11 && r1.awayRatings.length>=11, 'all players rated',
+  r1.homeRatings.length+'/'+r1.awayRatings.length);
+const allR = r1.homeRatings.concat(r1.awayRatings);
+assert(allR.every(x=>x.rating>=3 && x.rating<=10), 'ratings in range');
+const goalEvents = r1.events.filter(e=>e.type==='goal').length;
+assert(goalEvents === r1.homeGoals+r1.awayGoals, 'goal events match scoreline',
+  goalEvents+' events vs '+(r1.homeGoals+r1.awayGoals)+' goals');
+const sumGoals = allR.reduce((s,x)=>s+x.goals,0);
+assert(sumGoals === r1.homeGoals+r1.awayGoals, 'player goals sum to scoreline', sumGoals);
+assert(!!r1.motm, 'man of the match chosen');
+assert(r1.stats.possession[0]+r1.stats.possession[1]===100, 'possession sums to 100',
+  r1.stats.possession.join('/'));
+
+// scorers should skew to forwards
+let fwd=0, tot=0;
+for(let i=0;i<400;i++){
+  const r=M.play(liv,bur,hT,aT,FCM.DB.byId,{rng:new FCM.RNG(i*3+77)});
+  r.homeRatings.concat(r.awayRatings).forEach(x=>{
+    if(x.goals>0){ tot+=x.goals; if(P.GROUP[x.pos]==='ATT'||x.pos==='CAM') fwd+=x.goals; }
+  });
+}
+assert(fwd/tot > 0.45, 'forwards score most goals', (fwd/tot*100).toFixed(0)+'%');
+
+// penalties
+h2('6. Penalty shoot-outs');
+let pens=0, draws2=0;
+for(let i=0;i<300;i++){
+  const r=M.penalties(hT,aT,FCM.DB.byId,new FCM.RNG(i+1));
+  if(r.home===r.away) draws2++;
+  pens+=r.home+r.away;
+}
+assert(draws2===0, 'shoot-outs always produce a winner', draws2+' draws');
+assert(pens/300 > 4 && pens/300 < 14, 'penalty conversion sane', (pens/300).toFixed(1)+' scored per tie');
+
+// ------------------------------------------------------- development
+h2('7. Player development over a season');
+const wonder = DB.players.filter(p=>p.age<=19 && p.pot-p.ovr>=12).sort((a,b)=>b.pot-a.pot)[0];
+const before = wonder.ovr, beforeVal = wonder.value;
+for(let w=0; w<40; w++){
+  P.develop(wonder,{minutesShare:0.85,facilities:5,coaching:5,avgRating:7.2,rng:rng});
+}
+log(`  ${wonder.name} (${wonder.age}, pot ${wonder.pot}): ${before} -> ${wonder.ovr} ovr, ` +
+    `${U.money(beforeVal)} -> ${U.money(wonder.value)}`, 'dim');
+assert(wonder.ovr>before, 'wonderkid improves with games+facilities', before+' -> '+wonder.ovr);
+assert(wonder.ovr<=wonder.pot, 'never exceeds potential');
+assert(wonder.value>beforeVal, 'value rises with rating');
+
+const benched = DB.players.filter(p=>p.age<=19 && p.pot-p.ovr>=12 && p.id!==wonder.id)[0];
+const bBefore = benched.ovr;
+for(let w=0;w<40;w++) P.develop(benched,{minutesShare:0.02,facilities:1,coaching:1,avgRating:6.0,rng:rng});
+log(`  ${benched.name} (${benched.age}) rotting in the reserves: ${bBefore} -> ${benched.ovr}`, 'dim');
+assert(benched.ovr-bBefore < wonder.ovr-before, 'game time matters for growth',
+  `+${benched.ovr-bBefore} vs +${wonder.ovr-before}`);
+
+const vet = DB.players.filter(p=>p.age>=34 && p.ovr>=78 && (p.att.pac||0)>80)[0];
+if (vet) {
+  const vBefore=vet.ovr, vPac=vet.att.pac;
+  for(let w=0;w<40;w++) P.develop(vet,{minutesShare:0.8,facilities:5,coaching:5,avgRating:7,rng:rng});
+  log(`  ${vet.name} (${vet.age}) ageing: ovr ${vBefore} -> ${vet.ovr}, pace ${vPac} -> ${vet.att.pac}`, 'dim');
+  assert(vet.ovr<=vBefore, 'veterans decline', vBefore+' -> '+vet.ovr);
+}
+
+// wage demands
+h2('8. Valuation & wage demands');
+const star = DB.players.find(p=>p.name==='E. Haaland');
+if (star) {
+  const dem = P.wageDemand(star, 91);
+  log(`  ${star.name}: value ${U.money(star.value)}, current wage ${U.wage(star.wage)}, ` +
+      `demands ${U.wage(dem)}`, 'dim');
+  assert(dem > 100000, 'elite player demands elite wages', U.money(dem));
+}
+const kid = DB.players.filter(p=>p.age<=18 && p.ovr<62)[0];
+if (kid) {
+  const dem = P.wageDemand(kid, 40);
+  assert(dem < 20000, 'young low-rated player is cheap', U.wage(dem));
+}
+
+h2(fails === 0 ? 'ALL TESTS PASSED' : fails + ' TEST(S) FAILED');
+document.title = fails === 0 ? 'PASS' : 'FAIL(' + fails + ')';
+
+} catch (err) {
+  fails++;
+  log('EXCEPTION: ' + err.message, 'bad');
+  log(err.stack, 'dim');
+  document.title = 'ERROR';
+}
+</script>
+</body>
+</html>

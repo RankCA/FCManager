@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FC Manager</title>
+<script>
+  // Cache-bust the stylesheet the same way the modules are, so an updated
+  // build never renders with a stale theme.
+  document.write('<link rel="stylesheet" href="css/style.css?v=' + Date.now() + '">');
+</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+</head>
+<body>
+
+<!-- ============ Loading ============ -->
+<div id="boot" class="boot">
+  <div class="boot-inner">
+    <div class="boot-badge">⚽</div>
+    <h1>FC MANAGER</h1>
+    <p id="boot-msg">Loading player database…</p>
+    <div class="boot-bar"><div id="boot-bar-fill"></div></div>
+  </div>
+</div>
+
+<!-- ============ Start screen ============ -->
+<div id="start" class="screen-start hidden">
+  <div class="start-hero">
+    <h1>FC MANAGER</h1>
+    <p class="tagline">Take charge. Build a dynasty.</p>
+  </div>
+
+  <div class="start-panel">
+    <div id="start-continue" class="continue-box hidden">
+      <div>
+        <div class="cont-label">Continue your career</div>
+        <div id="cont-detail" class="cont-detail"></div>
+      </div>
+      <button class="btn btn-primary" id="btn-continue">Continue</button>
+    </div>
+
+    <h2>New Career</h2>
+    <label class="fld">
+      <span>Manager name</span>
+      <input type="text" id="mgr-name" placeholder="Your name" maxlength="28">
+    </label>
+
+    <label class="fld">
+      <span>Nation</span>
+      <select id="sel-country"></select>
+    </label>
+
+    <label class="fld">
+      <span>League</span>
+      <select id="sel-league"></select>
+    </label>
+
+    <label class="fld">
+      <span>Club</span>
+      <select id="sel-club"></select>
+    </label>
+
+    <div id="club-preview" class="club-preview"></div>
+
+    <div class="fld">
+      <span>Difficulty</span>
+      <div id="diff-picker" class="diff-picker"></div>
+      <div id="diff-blurb" class="diff-blurb"></div>
+    </div>
+
+    <button class="btn btn-primary btn-lg" id="btn-start">Start Career</button>
+
+    <div class="load-file-row">
+      <button class="btn" id="btn-loadfile">📂 Load save file…</button>
+      <input type="file" id="file-input" accept=".fcsave,.json,application/json" hidden>
+    </div>
+
+    <p class="fineprint" id="start-version"></p>
+  </div>
+</div>
+
+<!-- ============ Main app ============ -->
+<div id="app" class="app hidden">
+  <header class="topbar">
+    <div class="tb-club">
+      <div id="tb-badge" class="badge badge-sm"></div>
+      <div>
+        <div id="tb-clubname" class="tb-name"></div>
+        <div id="tb-league" class="tb-sub"></div>
+      </div>
+    </div>
+
+    <nav class="tabs" id="tabs"></nav>
+
+    <div class="tb-right">
+      <div class="tb-date">
+        <div id="tb-day" class="tb-name"></div>
+        <div id="tb-season" class="tb-sub"></div>
+      </div>
+      <button class="btn btn-primary" id="btn-advance">Continue</button>
+      <button class="btn" id="btn-simnext" title="Simulate to your next match">Sim to match</button>
+      <button class="btn btn-ghost" id="btn-save" title="Save game">Save</button>
+      <span class="version-chip" id="version-chip" title="Game version"></span>
+    </div>
+  </header>
+
+  <main id="view" class="view"></main>
+</div>
+
+<!-- ============ Modal ============ -->
+<div id="modal" class="modal hidden">
+  <div class="modal-back"></div>
+  <div class="modal-box" id="modal-box"></div>
+</div>
+<div id="toasts" class="toasts"></div>
+
+<script>
+// Load modules in dependency order. Cache-busted during development so
+// edits are always picked up.
+(function () {
+  // Always load fresh. Everything is served from disk/localhost, so caching
+  // buys nothing here and stale modules are a real hazard after an update.
+  var v = '?v=' + Date.now();
+  ['js/core/version.js', 'js/core/rng.js', 'js/core/util.js', 'js/core/names.js',
+   'js/engine/player.js', 'js/engine/tactics.js', 'js/engine/match.js',
+   'js/engine/competitions.js', 'js/engine/transfers.js', 'js/engine/youth.js',
+   'js/engine/difficulty.js', 'js/engine/finance.js',
+   'js/engine/awards.js', 'js/engine/training.js',
+   'js/data/db-clubs.js', 'js/data/db-nations.js', 'js/data/db-names.js',
+   'js/data/db-players.js', 'js/engine/db.js', 'js/engine/game.js',
+   'js/engine/save.js', 'js/ui/ui.js', 'js/ui/screens.js', 'js/ui/live.js',
+   'js/ui/app.js']
+    .forEach(function (f) { document.write('<script src="' + f + v + '"><\/script>'); });
+})();
+</script>
+</body>
+</html>

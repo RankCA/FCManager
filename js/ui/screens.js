@@ -31,7 +31,7 @@
       [[next.homeName, 'Home'], [next.awayName, 'Away']].forEach((pair, i) => {
         if (i === 1) nm.appendChild(el('div', { class: 'nm-vs', text: 'v' }));
         const side = el('div', { class: 'nm-side' });
-        side.appendChild(el('div', { class: 'nation-crest', text: '🌍' }));
+        side.appendChild(UI.nationBadge(pair[0], 'lg'));
         side.appendChild(el('div', { text: pair[0], style: 'font-weight:600;font-size:13px' }));
         side.appendChild(el('div', { class: 'tiny muted', text: pair[1] }));
         nm.appendChild(side);
@@ -292,6 +292,7 @@
           const row = el('div', { class: 'group-row' +
             (i < 2 ? ' through' : '') + (r.nation === mine ? ' mine' : '') });
           row.appendChild(el('span', { class: 'group-pos', text: r.pos }));
+          row.appendChild(UI.nationBadge(r.nation, 'xs'));
           row.appendChild(el('span', { class: 'group-team', text: r.nation }));
           row.appendChild(el('span', { class: 'group-num', text: r.p }));
           row.appendChild(el('span', { class: 'group-num',
@@ -334,6 +335,7 @@
             const row = el('div', { class: 'ko-team' +
               (tie.played ? (won ? ' won' : ' lost') : '') +
               (nation === mine ? ' mine' : '') });
+            row.appendChild(UI.nationBadge(nation, 'xs'));
             row.appendChild(el('span', { class: 'ko-name', text: nation }));
             row.appendChild(el('span', { class: 'mono tiny',
               text: tie.played ? String(goals) : '' }));
@@ -728,9 +730,12 @@
     if (!G().liveTournaments().some(t => !t.complete)) return null;
     if (!FCM.App.teamView) FCM.App.teamView = 'club';
     const seg = el('div', { class: 'seg', style: 'margin-bottom:12px' });
-    [['club', myClub().name], ['nation', '🌍 ' + cr.nation]].forEach(([id, label]) => {
-      const b = el('button', { class: 'seg-btn' +
-        (FCM.App.teamView === id ? ' active' : ''), text: label });
+    [['club', myClub().name, myClub()], ['nation', cr.nation, null]]
+      .forEach(([id, label, club]) => {
+      const b = el('button', { class: 'seg-btn seg-btn-team' +
+        (FCM.App.teamView === id ? ' active' : '') });
+      b.appendChild(club ? UI.badge(club, 'xs') : UI.nationBadge(label, 'xs'));
+      b.appendChild(el('span', { text: label }));
       b.addEventListener('click', function () { FCM.App.teamView = id; FCM.App.render(); });
       seg.appendChild(b);
     });
@@ -757,6 +762,14 @@
     const nation = SC.viewingNation();
     if (nation) {
       const pool = FCM.IN.callUpSquad(nation, 26) || [];
+      const flagRow = el('div', { class: 'row', style: 'align-items:center;gap:10px;margin-bottom:10px' });
+      flagRow.appendChild(UI.nationBadge(nation, 'lg'));
+      const ftxt = el('div');
+      ftxt.appendChild(el('div', { text: nation, style: 'font-weight:700;font-size:17px' }));
+      ftxt.appendChild(el('div', { class: 'tiny mute2',
+        text: (FCM.IN.CONFEDS[(FCM.NT.get(nation) || {}).confed] || {}).label || '' }));
+      flagRow.appendChild(ftxt);
+      wrap.appendChild(flagRow);
       const cols = [
         { key: 'pos', label: 'Pos', nosort: true, render: p => UI.posPill(p.pos[0]) },
         { key: 'name', label: 'Player', render: p => UI.playerLink(p) },
@@ -1082,7 +1095,7 @@
         n => n.strength, true).slice(0, 5);
       nations.forEach(n => {
         const r = el('div', { class: 'pick-row' });
-        r.appendChild(el('span', { class: 'nation-flag', text: '🌍' }));
+        r.appendChild(UI.nationBadge(n, 'sm'));
         const nm = el('div', { style: 'flex:1' });
         nm.appendChild(el('div', { text: n.name, style: 'font-weight:600' }));
         nm.appendChild(el('div', { class: 'tiny mute2',
@@ -3774,8 +3787,9 @@
       body.appendChild(UI.table(cols, squad, { sortKey: 'ovr', sortDesc: true }));
     }
 
-    UI.modal('🌍 ' + nation, body,
-      [el('button', { class: 'btn', text: 'Close', onclick: UI.closeModal })]);
+    UI.modal(nation, body,
+      [el('button', { class: 'btn', text: 'Close', onclick: UI.closeModal })],
+      { badge: UI.nationBadge(nation, 'lg') });
   };
 
   // =====================================================================

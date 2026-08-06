@@ -54,6 +54,50 @@
     return el;
   };
 
+  // ---- National team flags -------------------------------------------
+  // Same idea as club crests: drop images into assets/flags/<slug>.png.
+  // Until then a nation shows a coloured monogram, so nothing looks broken.
+  const flagCache = {};
+
+  /**
+   * Filename-safe form of a nation's name, matching the club slug rule:
+   * accents folded to ASCII, everything else lowercased and hyphenated.
+   * "Côte d'Ivoire" becomes "cote-d-ivoire".
+   */
+  UI.nationSlug = function (name) {
+    return String(name || '')
+      .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^A-Za-z0-9]/g, '-')
+      .toLowerCase()
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+  };
+
+  UI.nationBadge = function (nation, size) {
+    const el = U.el('div', { class: 'badge badge-flag ' + (size ? 'badge-' + size : ''),
+      title: nation || '' });
+    if (!nation) return el;
+    const cols = clubColours(nation);
+    el.style.background = 'linear-gradient(150deg,' + cols[0] + ',' + cols[1] + ')';
+    el.textContent = initials(nation);
+
+    const slug = UI.nationSlug(nation);
+    const cached = flagCache[slug];
+    if (cached === false) return el;
+    if (cached) { UI.applyBadgeImage(el, cached); return el; }
+
+    let i = 0;
+    (function tryNext() {
+      if (i >= BADGE_EXT.length) { flagCache[slug] = false; return; }
+      const src = 'assets/flags/' + slug + '.' + BADGE_EXT[i++];
+      const img = new Image();
+      img.onload = function () { flagCache[slug] = src; UI.applyBadgeImage(el, src); };
+      img.onerror = tryNext;
+      img.src = src;
+    })();
+    return el;
+  };
+
   UI.applyBadgeImage = function (el, src) {
     el.textContent = '';
     el.style.background = 'transparent';

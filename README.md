@@ -344,7 +344,7 @@ generation you built.
 
 ---
 
-## Adding club badges
+## Adding badges and flags
 
 Drop image files into `assets/badges/` named after the club slug:
 
@@ -354,12 +354,26 @@ assets/badges/real-madrid.png
 assets/badges/fc-bayern-munchen.png
 ```
 
+National team flags go in `assets/flags/`, named the same way:
+
+```
+assets/flags/england.png
+assets/flags/cote-d-ivoire.png
+assets/flags/turkiye.png
+```
+
 `.png` is recommended; `.svg`, `.jpg` and `.webp` also work.
 
-**`assets/badges/BADGE-NAMES.md` lists the exact filename for all 400 clubs**,
-grouped by country and league.
+- **`assets/badges/BADGE-NAMES.md`** lists the exact filename for all 400 clubs,
+  grouped by country and league
+- **`assets/flags/FLAG-NAMES.md`** lists all 211 nations, grouped by confederation
+  and ordered by footballing standing
 
-Any club without an image gets a generated monogram crest automatically, so you can add
+Accents and punctuation fold to plain ASCII, so *Türkiye* is `turkiye` and
+*Côte d'Ivoire* is `cote-d-ivoire`. Flags fill their tile rather than sitting
+inside it, so a 4:3 or 3:2 source at roughly 128px wide looks best.
+
+Anything without an image gets a generated monogram automatically, so you can add
 as many or as few as you want, whenever you want.
 
 ---

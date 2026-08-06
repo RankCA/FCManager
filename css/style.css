@@ -366,6 +366,13 @@ tbody tr { transition: background .12s; }
   background-size: cover; background-position: center;
 }
 .badge img { width: 100%; height: 100%; object-fit: contain; }
+/* Flags are rectangular artwork, so they fill the tile rather than sit
+   inside it the way a crest does. */
+.badge-flag { border-radius: 4px; }
+.badge-flag img { object-fit: cover; }
+.badge-xs { width: 17px; height: 17px; font-size: 7.5px; border-radius: 3px; }
+/* Segment buttons that carry a crest or flag alongside the name. */
+.seg-btn-team { display: inline-flex; align-items: center; gap: 7px; }
 .badge-sm { width: 28px; height: 28px; font-size: 10.5px; border-radius: 6px; }
 .badge-lg { width: 56px; height: 56px; font-size: 18px; border-radius: 11px; }
 .badge-xl { width: 76px; height: 76px; font-size: 23px; border-radius: 14px; }

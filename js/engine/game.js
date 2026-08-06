@@ -68,6 +68,7 @@
       internationals: [],
       ballonDor: [],
       activeTournaments: [],
+      qualifying: [],
       hallOfFame: [],
       seekingJob: false,
       objectives: [],
@@ -114,6 +115,7 @@
     s.staff = FCM.TN.initStaff(FCM.DB.clubById[s.userClubId]);
 
     G.setupSeason(true);
+    G.startQualifying();
     G.setBoardExpectation();
     s.objectives = FCM.AW.generateObjectives(s, FCM.DB.clubById[s.userClubId],
       FCM.DB.leagueOf(FCM.DB.clubById[s.userClubId]));
@@ -776,6 +778,9 @@
     G.resolveLoans();
     G.resolveStadium();
 
+    // Qualifiers are played at the international breaks through the season.
+    if (FCM.IN.BREAK_DAYS.indexOf(s.day) >= 0) G.tickQualifying();
+
     // The international summer runs alongside the tail of the season.
     if (s.day === FCM.IN.FIRST_DAY) G.startInternationalSummer();
     if (s.day >= FCM.IN.FIRST_DAY) G.tickInternationals();
@@ -1238,7 +1243,7 @@
     const s = G.state;
     const club = G.allFixtures()
       .filter(f => f.home === s.userClubId || f.away === s.userClubId);
-    return club.concat(G.nationalFixtures())
+    return club.concat(G.nationalFixtures(), G.qualifyingFixtures())
       .sort((a, b) => (a.day || 999) - (b.day || 999));
   };
 
@@ -1347,7 +1352,14 @@
     const due = FCM.IN.tournamentsFor(s.season);
     s.activeTournaments = [];
     due.forEach(t => {
-      const built = FCM.IN.createTournament(t, rng, cr.nation);
+      // A season of qualifying decides the field. Without one (an older save,
+      // or a campaign that could not be built) fall back to seeding on
+      // strength, which is what the game did before qualifying existed.
+      const q = (s.qualifying || []).find(x => x.id === t.id);
+      if (q && !q.complete) FCM.IN.finaliseQualifying(q);
+      const field = q ? FCM.IN.qualifiedNations(q) : null;
+
+      const built = FCM.IN.createTournament(t, rng, cr.nation, field);
       if (!built) return;
       s.activeTournaments.push(built);
       const involved = cr.nation && built.teams.indexOf(cr.nation) >= 0;
@@ -1356,6 +1368,64 @@
         (involved ? 'You lead ' + cr.nation + ' into the tournament.'
           : 'Follow it from the Home tab.'), involved ? 'board' : 'info');
     });
+    s.qualifying = [];
+  };
+
+  // ---- Qualifying campaigns -------------------------------------------
+  /** Draw the qualifying groups for whatever is on next summer. */
+  G.startQualifying = function () {
+    const s = G.state, rng = G.rng;
+    const cr = FCM.CR.ensure(s);
+    s.qualifying = [];
+    FCM.IN.tournamentsFor(s.season).forEach(t => {
+      const q = FCM.IN.createQualifying(t, rng, cr.nation);
+      if (q) s.qualifying.push(q);
+    });
+  };
+
+  /** Play any qualifiers falling on today, and report the user's own. */
+  G.tickQualifying = function () {
+    const s = G.state, rng = G.rng;
+    if (!s.qualifying || !s.qualifying.length) return;
+    const cr = FCM.CR.ensure(s);
+    s.qualifying.forEach(q => {
+      const played = FCM.IN.tickQualifying(q, s.day, rng);
+      if (!played || !cr.nation) return;
+      played.forEach(f => {
+        if (f.home !== cr.nation && f.away !== cr.nation) return;
+        const us = f.home === cr.nation ? f.hg : f.ag;
+        const them = f.home === cr.nation ? f.ag : f.hg;
+        const opp = f.home === cr.nation ? f.away : f.home;
+        const outcome = us > them ? 'Won' : (us === them ? 'Drew' : 'Lost');
+        G.news(cr.nation + ' ' + us + '–' + them + ' ' + opp,
+          outcome + ' away at the international break. ' + q.name +
+          ' qualifying.', us > them ? 'trophy' : 'info');
+      });
+    });
+  };
+
+  /** Every qualifier involving the nation you manage. */
+  G.qualifyingFixtures = function () {
+    const s = G.state;
+    const cr = s.career;
+    if (!cr || !cr.nation) return [];
+    const out = [];
+    (s.qualifying || []).forEach(q => {
+      q.campaigns.forEach(c => {
+        c.fixtures.forEach(f => {
+          if (f.home !== cr.nation && f.away !== cr.nation) return;
+          out.push({
+            comp: 'intl:' + q.id, compName: q.name + ' qualifying',
+            international: true, nation: cr.nation,
+            round: 'Group ' + f.group, day: f.day, played: f.played,
+            hg: f.hg, ag: f.ag, homeName: f.home, awayName: f.away,
+            isHome: f.home === cr.nation,
+            opponent: f.home === cr.nation ? f.away : f.home
+          });
+        });
+      });
+    });
+    return out;
   };
 
   /** Advance any running tournament, and wrap up when the final is done. */
@@ -1557,6 +1627,7 @@
     s.finances = { wagesPaid: 0, transferSpend: 0, transferIncome: 0, matchdayIncome: 0 };
     s.seasonLog.push({ season: s.season - 1, history: s.history.slice() });
     G.setupSeason(false);
+    G.startQualifying();
     G.setBoardExpectation();
     FCM.AW.resetRivals();
     FCM.AW.resetMonthly();

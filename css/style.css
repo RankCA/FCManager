@@ -1178,7 +1178,8 @@ tbody tr.is-user:hover { background: rgba(34,197,94,.15); }
 .group-name { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em;
   color: var(--text-mute); font-weight: 700; margin-bottom: 6px; }
 .group-row {
-  display: grid; grid-template-columns: 16px 1fr 22px 28px 24px;
+  /* pos · flag · nation · played · GD · points */
+  display: grid; grid-template-columns: 16px 17px 1fr 22px 28px 24px;
   gap: 5px; align-items: center; font-size: 12px; padding: 3px 4px; border-radius: 5px;
 }
 .group-row.through { background: color-mix(in srgb, var(--accent) 11%, transparent); }

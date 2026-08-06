@@ -203,6 +203,204 @@
   // The summer window is tight: a 64-team World Cup needs three group
   // matchdays plus five knockout rounds inside ~30 days before the season
   // rolls over, so the gaps are deliberately short.
+  // ---- Qualifying ------------------------------------------------------
+  /**
+   * International breaks, spread across the club season the way real ones
+   * are: early September through to late March. Six double-headers gives
+   * ten qualifying matchdays without ever clashing with a league weekend.
+   */
+  IN.BREAK_DAYS = [72, 75, 103, 106, 145, 148, 218, 221, 260, 263];
+
+  // Relative share of a World Cup field, shaped like FIFA's real allocation.
+  // These are weights, not counts - they are apportioned to the actual field
+  // size below, so they always add up to exactly the number of places.
+  const CONFED_WEIGHT = { europe: 13, africa: 9, samerica: 6, asia: 8, namerica: 6, oceania: 1 };
+
+  /**
+   * Places per confederation, summing exactly to the tournament's field.
+   * Largest-remainder apportionment: rounding each share independently
+   * handed out 84 places at a 64-team World Cup.
+   */
+  function worldCupQuotas(teams) {
+    const ids = Object.keys(CONFED_WEIGHT);
+    const total = ids.reduce((a, k) => a + CONFED_WEIGHT[k], 0);
+    const exact = {}, quota = {};
+    let used = 0;
+    ids.forEach(k => {
+      exact[k] = CONFED_WEIGHT[k] / total * teams;
+      quota[k] = Math.max(1, Math.floor(exact[k]));
+      used += quota[k];
+    });
+    // Hand the leftovers to whoever was rounded down hardest.
+    const order = U.sortBy(ids, k => exact[k] - Math.floor(exact[k]), true);
+    let i = 0;
+    while (used < teams && i < order.length * 4) {
+      quota[order[i % order.length]]++; used++; i++;
+    }
+    return quota;
+  }
+
+  /** How many places a confederation's qualifying campaign is playing for. */
+  function placesFor(tournament, confed) {
+    if (tournament.confed) return tournament.teams;
+    return worldCupQuotas(tournament.teams)[confed] || 1;
+  }
+
+  /**
+   * Build a qualifying campaign: every nation in the confederation drawn
+   * into groups, playing a single round robin across the international
+   * breaks. The group winners go through, then the best runners-up until
+   * the confederation's places are filled.
+   *
+   * Hosts and holders do not get a bye - everyone qualifies, which keeps
+   * the code honest and the drama higher.
+   */
+  IN.createQualifying = function (tournament, rng, userNation) {
+    const confeds = tournament.confed
+      ? [tournament.confed]
+      : Object.keys(IN.CONFEDS);
+    const campaigns = [];
+
+    confeds.forEach(cid => {
+      const field = FCM.NT.inConfed(cid)
+        .map(n => ({ nation: n.name, strength: IN.nationStrength(n.name) }))
+        .filter(x => x.strength > 0);
+      if (field.length < 4) return;
+
+      const places = Math.min(placesFor(tournament, cid), field.length);
+      // Groups of five or six, seeded so the strong sides are spread out.
+      const groupCount = Math.max(1, Math.min(Math.ceil(field.length / 5), places));
+      const seeded = U.sortBy(field, x => x.strength, true);
+      const groups = [];
+      for (let g = 0; g < groupCount; g++) {
+        groups.push({ name: cid.slice(0, 3).toUpperCase() + (g + 1), teams: [] });
+      }
+      seeded.forEach((team, i) => {
+        // Snake the draw so pot one does not all land in the same group.
+        const band = Math.floor(i / groupCount);
+        const idx = band % 2 === 0 ? (i % groupCount) : (groupCount - 1 - (i % groupCount));
+        groups[idx].teams.push(team.nation);
+      });
+
+      const fixtures = [];
+      groups.forEach(g => {
+        roundRobin(g.teams).forEach((pairs, r) => {
+          // Wrap around the ten break days for groups that need more rounds.
+          const day = IN.BREAK_DAYS[r % IN.BREAK_DAYS.length];
+          pairs.forEach(pair => {
+            fixtures.push({ group: g.name, home: pair[0], away: pair[1],
+              day: day, round: r + 1, played: false, hg: 0, ag: 0 });
+          });
+        });
+      });
+
+      campaigns.push({
+        confed: cid, places: places, groups: groups, fixtures: fixtures,
+        strength: field.reduce((m, x) => { m[x.nation] = x.strength; return m; }, {}),
+        qualified: null
+      });
+    });
+
+    if (!campaigns.length) return null;
+    return {
+      id: tournament.id, name: tournament.name, short: tournament.short,
+      year: tournament.year, teams: tournament.teams, confed: tournament.confed,
+      guests: tournament.guests || null,
+      campaigns: campaigns, userNation: userNation || null, complete: false
+    };
+  };
+
+  /** Standings for one qualifying group. */
+  IN.qualifyingTable = function (campaign, group) {
+    const rows = {};
+    group.teams.forEach(n => {
+      rows[n] = { nation: n, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0 };
+    });
+    campaign.fixtures.forEach(f => {
+      if (f.group !== group.name || !f.played) return;
+      const h = rows[f.home], a = rows[f.away];
+      if (!h || !a) return;
+      h.p++; a.p++;
+      h.gf += f.hg; h.ga += f.ag; a.gf += f.ag; a.ga += f.hg;
+      if (f.hg > f.ag) { h.w++; a.l++; h.pts += 3; }
+      else if (f.hg < f.ag) { a.w++; h.l++; a.pts += 3; }
+      else { h.d++; a.d++; h.pts++; a.pts++; }
+    });
+    const list = Object.values(rows);
+    list.forEach(r => { r.gd = r.gf - r.ga; });
+    list.sort((x, y) => y.pts - x.pts || y.gd - x.gd || y.gf - x.gf ||
+      (campaign.strength[y.nation] || 0) - (campaign.strength[x.nation] || 0));
+    list.forEach((r, i) => { r.pos = i + 1; });
+    return list;
+  };
+
+  /** Play any qualifiers due on `day`. Returns the results. */
+  IN.tickQualifying = function (q, day, rng) {
+    if (!q || q.complete) return null;
+    const played = [];
+    q.campaigns.forEach(c => {
+      // The manager's own selection decides how strong his nation is here too.
+      if (q.userNation && c.strength[q.userNation] !== undefined) {
+        const picked = IN.selectedStrength(q.userNation);
+        if (picked) c.strength[q.userNation] = picked;
+      }
+      c.fixtures.forEach(f => {
+        if (f.played || f.day !== day) return;
+        const r = playMatch(c, f.home, f.away, rng, false);
+        f.hg = r.hg; f.ag = r.ag; f.played = true;
+        played.push(f);
+      });
+    });
+    return played.length ? played : null;
+  };
+
+  /** Resolve a finished campaign into the nations that qualified. */
+  IN.finaliseQualifying = function (q) {
+    if (!q || q.complete) return q;
+    q.campaigns.forEach(c => {
+      // Rank by finishing position first, then by record. Every group winner
+      // goes through, then the best runners-up, then the best third places if
+      // the confederation still has places to fill - AFCON takes 24 of 54.
+      const tiers = [];
+      c.groups.forEach(g => {
+        const table = IN.qualifyingTable(c, g);
+        g.table = table;
+        table.forEach((row, i) => {
+          (tiers[i] = tiers[i] || []).push(row);
+        });
+      });
+      const through = [];
+      tiers.forEach(tier => {
+        if (through.length >= c.places) return;
+        U.sortBy(tier, r => r.pts * 1000 + r.gd, true).forEach(r => {
+          if (through.length < c.places) through.push(r.nation);
+        });
+      });
+      c.qualified = through;
+    });
+    q.complete = true;
+    return q;
+  };
+
+  /** Everyone who came through a finished campaign. */
+  IN.qualifiedNations = function (q) {
+    if (!q) return null;
+    const out = [];
+    q.campaigns.forEach(c => { (c.qualified || []).forEach(n => out.push(n)); });
+    return out.length ? out : null;
+  };
+
+  /** The group a nation is in, for the Home tab. */
+  IN.qualifyingGroupOf = function (q, nation) {
+    if (!q) return null;
+    for (const c of q.campaigns) {
+      for (const g of c.groups) {
+        if (g.teams.indexOf(nation) >= 0) return { campaign: c, group: g };
+      }
+    }
+    return null;
+  };
+
   IN.FIRST_DAY = 332;      // early June, after the club season
   IN.GROUP_GAP = 3;        // days between group matchdays
   IN.KO_GAP = 4;
@@ -235,8 +433,14 @@
    * Build a full tournament: seeded groups, a fixture list spread across
    * the summer, and an empty bracket to fill as rounds resolve.
    */
-  IN.createTournament = function (tournament, rng, userNation) {
-    const field = IN.qualifiers(tournament);
+  IN.createTournament = function (tournament, rng, userNation, qualified) {
+    // A finished qualifying campaign names the field. Anything else falls
+    // back to seeding the strongest sides, which is what happens on an old
+    // save or a confederation too small to run a campaign.
+    const field = (qualified && qualified.length >= 8)
+      ? qualified.map(n => ({ nation: n, strength: IN.nationStrength(n) }))
+          .filter(x => x.strength > 0)
+      : IN.qualifiers(tournament);
     if (field.length < 8) return null;
 
     // Groups of four, seeded so the strongest are spread out.

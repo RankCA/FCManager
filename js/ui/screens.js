@@ -87,6 +87,10 @@
     const live = G().liveTournaments();
     live.forEach(t => left.appendChild(SC.tournamentCard(t)));
 
+    // --- Your nation's qualifying group, during the season ---
+    const qCard = SC.qualifyingCard();
+    if (qCard) left.appendChild(qCard);
+
     // --- Inbox ---
     const inbox = el('div');
     const items = s.inbox.slice(0, 14);
@@ -233,6 +237,68 @@
    * A live international tournament: group tables while the group stage
    * runs, then the knockout bracket.
    */
+  /**
+   * Your nation's qualifying group while the campaign is running. Nothing
+   * to show if you have no national job, or once the groups are settled.
+   */
+  SC.qualifyingCard = function () {
+    const s = S();
+    const cr = FCM.CR.ensure(s);
+    if (!cr.nation || !(s.qualifying || []).length) return null;
+
+    const wrap = el('div', { class: 'stack' });
+    (s.qualifying || []).forEach(q => {
+      if (q.complete) return;
+      const found = FCM.IN.qualifyingGroupOf(q, cr.nation);
+      if (!found) return;
+      const table = FCM.IN.qualifyingTable(found.campaign, found.group);
+      const played = found.campaign.fixtures.filter(f => f.played).length;
+      const total = found.campaign.fixtures.length;
+
+      const body = el('div');
+      body.appendChild(el('div', { class: 'tiny mute2', style: 'margin-bottom:8px',
+        text: found.campaign.places + ' of ' + found.campaign.groups.length +
+          ' groups qualify · matchday ' +
+          Math.min(FCM.IN.BREAK_DAYS.length, Math.ceil(played / Math.max(1, total /
+            FCM.IN.BREAK_DAYS.length))) }));
+
+      const box = el('div', { class: 'group-box' });
+      table.forEach((r, i) => {
+        const row = el('div', { class: 'group-row' +
+          (i === 0 ? ' through' : '') + (r.nation === cr.nation ? ' mine' : '') });
+        row.appendChild(el('span', { class: 'group-pos', text: r.pos }));
+        row.appendChild(UI.nationBadge(r.nation, 'xs'));
+        row.appendChild(el('span', { class: 'group-team', text: r.nation }));
+        row.appendChild(el('span', { class: 'group-num', text: r.p }));
+        row.appendChild(el('span', { class: 'group-num',
+          text: (r.gd > 0 ? '+' : '') + r.gd }));
+        row.appendChild(el('b', { class: 'group-num', text: r.pts }));
+        box.appendChild(row);
+      });
+      body.appendChild(box);
+
+      // Next couple of fixtures, so you know what is coming.
+      const mine = found.campaign.fixtures
+        .filter(f => f.home === cr.nation || f.away === cr.nation);
+      const list = el('div', { style: 'margin-top:10px' });
+      mine.slice(0, 5).forEach(f => {
+        const row = el('div', { class: 'intl-fx' + (f.played ? ' played' : '') });
+        row.appendChild(el('span', { class: 'tiny mute2', style: 'width:46px;flex:none',
+          text: f.day != null ? date(f.day, 'short') : '' }));
+        row.appendChild(el('span', { style: 'flex:1', text: f.home + '  v  ' + f.away }));
+        row.appendChild(el('b', { class: 'mono', text: f.played ? f.hg + '–' + f.ag : '' }));
+        list.appendChild(row);
+      });
+      body.appendChild(list);
+
+      const card = UI.card(q.name + ' Qualifying', body,
+        el('span', { class: 'pill', text: found.group.name }));
+      FCM.CT.applyRow(card, 'intl:' + q.id);
+      wrap.appendChild(card);
+    });
+    return wrap.children.length ? wrap : null;
+  };
+
   SC.tournamentCard = function (t) {
     const s = S();
     const cr = FCM.CR.ensure(s);

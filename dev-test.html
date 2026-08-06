@@ -445,6 +445,73 @@ const names = {};
 });
 assert(Object.values(names).every(v => v.length > 4), 'thin nations still field named players');
 
+// ------------------------------------------------------ qualifying campaigns
+h2('14. Qualifying campaigns');
+FCM.G = FCM.G || {};
+FCM.G.state = { tactics: {} };
+[2025, 2026].forEach(season => {
+  IN.tournamentsFor(season).forEach(t => {
+    const q = IN.createQualifying(t, new FCM.RNG(11), null);
+    if (!q) { assert(false, t.name + ' draws a campaign', 'null'); return; }
+
+    // Places must add up to the field exactly. Rounding each confederation's
+    // share independently handed out 84 places at a 64-team World Cup.
+    const places = q.campaigns.reduce((a, c) => a + c.places, 0);
+    assert(places === t.teams, t.name + ' qualifying plays for exactly its field',
+      places + '/' + t.teams);
+
+    // A group must never have to produce more qualifiers than it has teams.
+    const impossible = q.campaigns.filter(c =>
+      c.places > c.groups.reduce((a, g) => a + g.teams.length, 0));
+    assert(impossible.length === 0, t.name + ': every confederation can fill its places',
+      impossible.map(c => c.confed).join(', ') || 'ok');
+
+    // Nobody plays twice on the same day.
+    let clashes = 0;
+    q.campaigns.forEach(c => {
+      const seen = {};
+      c.fixtures.forEach(f => {
+        seen[f.day] = seen[f.day] || {};
+        [f.home, f.away].forEach(n => {
+          if (seen[f.day][n]) clashes++;
+          seen[f.day][n] = 1;
+        });
+      });
+    });
+    assert(clashes === 0, t.name + ': no nation is double-booked at a break', clashes);
+
+    // Every fixture must fall on a real international break.
+    const offBreak = [];
+    q.campaigns.forEach(c => c.fixtures.forEach(f => {
+      if (IN.BREAK_DAYS.indexOf(f.day) < 0) offBreak.push(f.day);
+    }));
+    assert(offBreak.length === 0, t.name + ': qualifiers only at international breaks',
+      offBreak.slice(0, 3).join(',') || 'ok');
+
+    // Play it out and check the field comes out the right size.
+    const qrng = new FCM.RNG(3);
+    IN.BREAK_DAYS.forEach(d => IN.tickQualifying(q, d, qrng));
+    IN.finaliseQualifying(q);
+    const through = IN.qualifiedNations(q);
+    assert(through && through.length === t.teams, t.name + ': qualifying fills the field',
+      (through ? through.length : 0) + '/' + t.teams);
+    assert(new Set(through).size === through.length, t.name + ': nobody qualifies twice');
+
+    if (t.id === 'worldcup') {
+      const byConfed = {};
+      through.forEach(n => { const c = NT.confedOf(n); byConfed[c] = (byConfed[c] || 0) + 1; });
+      log('  World Cup field: ' + Object.keys(byConfed).sort()
+        .map(k => k + ' ' + byConfed[k]).join(', '), 'dim');
+      // Qualifying has to be capable of eliminating a strong nation, or it
+      // is just an expensive way of seeding on strength.
+      const top8 = NT.ranked().slice(0, 8).map(n => n.name);
+      const missing = top8.filter(n => through.indexOf(n) < 0);
+      log('  strong nations who missed out: ' + (missing.join(', ') || 'none'), 'dim');
+    }
+  });
+});
+FCM.G.state = null;
+
 h2(fails === 0 ? 'ALL TESTS PASSED' : fails + ' TEST(S) FAILED');
 document.title = fails === 0 ? 'PASS' : 'FAIL(' + fails + ')';
 

@@ -21,7 +21,8 @@
    'js/core/util.js', 'js/core/names.js',
    'js/engine/player.js', 'js/engine/tactics.js', 'js/engine/match.js',
    'js/engine/youth.js', 'js/engine/finance.js', 'js/engine/morale.js',
-   'js/engine/manmgmt.js', 'js/engine/nations.js',
+   'js/engine/training.js', 'js/engine/manmgmt.js', 'js/engine/scouting.js',
+   'js/engine/nations.js',
    'js/engine/international.js',
    'js/data/db-clubs.js', 'js/data/db-nations.js', 'js/data/db-names.js',
    'js/data/db-players.js', 'js/data/db-intl.js', 'js/engine/db.js']
@@ -575,6 +576,66 @@ assert(MM.influence(best) > MM.influence(worst),
   'the best player carries more weight in the room',
   MM.influence(best) + ' vs ' + MM.influence(worst));
 assert(room.length === mmSquad.length, 'every player is placed in the room');
+
+// ------------------------------------------------------- opposition reports
+h2('16. Opposition reports');
+// The report reads the opponent's real tactics, so the game engine has to
+// be present. Stand in the minimum it needs.
+FCM.G = FCM.G || {};
+FCM.G.state = { tactics: {}, staff: {} };
+FCM.G.tacticsFor = function (club) {
+  const key = club.id;
+  if (!FCM.G.state.tactics[key]) {
+    const sq = FCM.DB.squadOf(club);
+    const t = T.defaultTactics();
+    const pk = T.autoPick(sq, t.formation);
+    t.lineup = pk.lineup; t.subs = pk.subs;
+    FCM.G.state.tactics[key] = t;
+  }
+  return FCM.G.state.tactics[key];
+};
+FCM.G.leagueTable = function () { return []; };
+
+const scoBig = DB.clubs.find(c => c.name === 'Liverpool');
+const scoSmall = DB.clubs.find(c => c.name === 'Burnley');
+const levels = [1, 2, 3, 4, 5].map(lvl => {
+  FCM.G.state.staff.scouting = { hired: true, rating: lvl };
+  return { lvl: lvl, rep: FCM.SCO.report(FCM.G.state, scoBig, scoSmall) };
+});
+levels.forEach(x => {
+  assert(!!x.rep, 'a report is produced at ★' + x.lvl);
+});
+// Depth has to actually scale, or paying for a Chief Scout is pointless.
+assert(!levels[0].rep.danger && !levels[0].rep.xi,
+  '★1 gives you almost nothing');
+assert(!!levels[2].rep.danger, '★3 names their danger man',
+  levels[2].rep.danger ? levels[2].rep.danger.player.name : '');
+assert(!levels[2].rep.xi && !!levels[4].rep.xi, '★5 shows their likely XI');
+assert(!!levels[4].rep.advice, '★5 makes a recommendation', levels[4].rep.advice);
+assert(levels[1].rep.strengths.length + levels[1].rep.weaknesses.length > 0,
+  '★2 compares the two sides');
+
+// Ratings must be on the player scale, not raw summed totals - 273 v 454
+// meant nothing to anyone reading it.
+const u = levels[4].rep.units;
+assert(u.att > 30 && u.att < 100 && u.mid > 30 && u.mid < 100,
+  'unit ratings are on the 0-99 scale', u.att + '/' + u.mid + '/' + u.def);
+assert(levels[4].rep.xiRating > 30 && levels[4].rep.xiRating < 100,
+  'XI rating is readable', levels[4].rep.xiRating);
+log('  Liverpool XI ' + levels[4].rep.ourXiRating + ' v Burnley ' +
+  levels[4].rep.xiRating + ' — ' + FCM.SCO.verdict(levels[4].rep), 'dim');
+
+// The verdict has to swing with who you are facing.
+FCM.G.state.staff.scouting = { hired: true, rating: 5 };
+const reverse = FCM.SCO.report(FCM.G.state, scoSmall, scoBig);
+assert(FCM.SCO.verdict(levels[4].rep) !== FCM.SCO.verdict(reverse),
+  'the verdict flips when the roles reverse');
+assert(reverse.xiRating > reverse.ourXiRating,
+  'Burnley are told Liverpool are stronger');
+
+FCM.G.state = null;
+delete FCM.G.tacticsFor;
+delete FCM.G.leagueTable;
 
 h2(fails === 0 ? 'ALL TESTS PASSED' : fails + ' TEST(S) FAILED');
 document.title = fails === 0 ? 'PASS' : 'FAIL(' + fails + ')';

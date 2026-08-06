@@ -126,6 +126,23 @@ academy, staff, stadium, records and awards.
 - Individual programmes per player (shooting, passing, pace…), which work
   fastest on under-23s
 
+**Opposition reports**
+- A dossier on your next opponent from the next-match card: their likely XI
+  read from their *actual* tactics, their form, and their attack, midfield
+  and defence measured against the units you will put out
+- **Depth tracks the Chief Scout you employ.** One star gets a form guide;
+  three names their danger man; four finds the soft side of their back line
+  and anyone carrying a knock or a booking; five shows their whole XI and
+  recommends how to set up against it
+
+**Youth intake day**
+- Every March the academy delivers its crop as an event, with the academy
+  director's verdict — from *"the best group we have had in years"* down to
+  *"a poor crop, the academy needs investment"*, judged against what a club
+  of your standing ought to be producing
+- Potentials are shown as scouting *ranges*, so you have to make your own
+  mind up about who is worth keeping
+
 **Man management**
 - **Promises are commitments.** Promise regular football, a starting place or
   a contract review, and you are held to it — measured against the minutes he

@@ -1115,13 +1115,38 @@
         club.youth.push(p.id);
       });
       if (club.id === s.userClubId) {
+        // Intake day is an occasion. Keep the crop so the academy director
+        // can walk you through it rather than the players just appearing.
         const best = U.sortBy(players, p => p.pot, true)[0];
+        s.lastIntake = {
+          season: s.season, day: s.day,
+          ids: players.map(p => p.id),
+          verdict: G.intakeVerdict(players, club)
+        };
         G.news('Youth intake: ' + players.length + ' new prospects',
-          'Your academy has produced ' + players.length + ' players this year. ' +
-          'The pick of the bunch looks like ' + best.full + ' (' + best.pos[0] + ', age ' +
-          best.age + ').', 'youth');
+          s.lastIntake.verdict + ' The pick of the bunch looks like ' + best.full +
+          ' (' + best.pos[0] + ', age ' + best.age + ').', 'youth',
+          { type: 'youth-intake' });
       }
     });
+  };
+
+  /**
+   * The academy director's read on this year's crop. Judged against what a
+   * club of this standing ought to be producing, so a good year at a small
+   * club is still a good year.
+   */
+  G.intakeVerdict = function (players, club) {
+    if (!players.length) return 'A barren year — nobody has come through at all.';
+    const best = U.sortBy(players, p => p.pot, true)[0];
+    const expected = 52 + (club.youthRating || 3) * 3.4 + club.rep * 0.09;
+    const edge = best.pot - expected;
+    if (edge > 12) return 'The best group we have had in years — one of them ' +
+      'could play at the very top.';
+    if (edge > 5) return 'A strong intake with a genuine prospect in it.';
+    if (edge > -4) return 'A steady year — about what we would expect.';
+    if (edge > -11) return 'A thin year. Nobody here is going to change the club.';
+    return 'A poor crop. The academy needs investment.';
   };
 
   /** Leave the current club and go looking for work. */

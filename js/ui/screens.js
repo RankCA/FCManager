@@ -73,6 +73,15 @@
       meta.appendChild(el('div', { class: 'small mute2',
         text: daysAway <= 0 ? 'Today' : (daysAway === 1 ? 'Tomorrow' : 'In ' + daysAway + ' days') }));
       nmBody.appendChild(meta);
+      // Straight into the analysts' dossier on whoever we are facing.
+      const oppId = next.home === club.id ? next.away : next.home;
+      const oppClub = FCM.DB.clubById[oppId];
+      if (oppClub) {
+        const rowBtn = el('div', { style: 'display:flex;justify-content:center;margin-top:8px' });
+        rowBtn.appendChild(el('button', { class: 'btn btn-sm', text: '🔍 Scout report',
+          onclick: function () { SC.oppositionReport(oppClub); } }));
+        nmBody.appendChild(rowBtn);
+      }
       // Wash the whole card in the competition's colour.
       nmBody.style.background = 'linear-gradient(180deg,' + FCM.CT.tint(next.comp) + ', transparent 70%)';
       nmBody.style.borderTop = '2px solid ' + FCM.CT.accent(next.comp);
@@ -456,6 +465,33 @@
     const body = el('div');
     body.appendChild(el('p', { text: item.body, style: 'margin:0 0 14px;line-height:1.65' }));
     let foot = [el('button', { class: 'btn', text: 'Close', onclick: UI.closeModal })];
+
+    if (item.type === 'youth-intake') {
+      const intake = S().lastIntake;
+      const crop = ((intake && intake.ids) || []).map(id => FCM.DB.byId[id]).filter(Boolean);
+      if (crop.length) {
+        // The verdict is already the first line of the news item.
+        const cols = [
+          { key: 'pos', label: 'Pos', nosort: true, render: p => UI.posPill(p.pos[0]) },
+          { key: 'name', label: 'Player', render: p => UI.playerLink(p) },
+          { hide: 'xs', key: 'age', label: 'Age', num: true },
+          { key: 'ovr', label: 'Now', num: true, render: p => UI.rating(p.ovr) },
+          { key: 'pot', label: 'Potential', num: true, render: p => {
+            // The scouting range, not the true number - you have to judge.
+            const r = FCM.Y.scoutedPotential(p);
+            return el('span', { class: 'muted', text: r.low + '–' + r.high });
+          } }
+        ];
+        const t = UI.table(cols, crop, { sortKey: 'pot', sortDesc: true,
+          onRow: p => UI.playerProfile(p) });
+        const card = UI.card('This year\u2019s crop \u00b7 ' + crop.length, t);
+        card.querySelector('.card-body').style.padding = '0';
+        body.appendChild(card);
+      } else {
+        body.appendChild(el('div', { class: 'empty',
+          text: 'These prospects have already moved on.' }));
+      }
+    }
 
     if (item.type === 'transfer-offer') {
       const p = FCM.DB.byId[item.player];
@@ -2976,6 +3012,97 @@
     // One conference per fixture.
     return !(s.lastPressDay !== undefined && s.lastPressDay !== null &&
       s.lastPressDay >= s.day - 3 && s.lastPressDay <= s.day);
+  };
+
+  /**
+   * The analysts' dossier on the next opponent. How much it contains
+   * depends on the Chief Scout you employ, so it is worth paying for one.
+   */
+  SC.oppositionReport = function (oppClub) {
+    const s = S(), club = myClub();
+    const rep = FCM.SCO.report(s, club, oppClub);
+    if (!rep) { UI.toast('Nothing to report on.', 'warn'); return; }
+    const body = el('div', { class: 'stack' });
+
+    const head = el('div', { class: 'kv' });
+    [['Formation', rep.formation],
+     ['Recent form', rep.form.length ? rep.form.join(' ') : 'No games yet'],
+     ['Their XI', rep.xiRating + ' · ours ' + rep.ourXiRating],
+     ['Their att / mid / def', rep.units.att + ' · ' + rep.units.mid + ' · ' + rep.units.def],
+     ['Ours', rep.ourUnits.att + ' · ' + rep.ourUnits.mid + ' · ' + rep.ourUnits.def]
+    ].forEach(([k, v]) => {
+      head.appendChild(el('div', { class: 'k', text: k }));
+      head.appendChild(el('div', { class: 'v', text: v }));
+    });
+    body.appendChild(UI.card('Overview', head,
+      el('span', { class: 'tiny mute2', text: '★'.repeat(rep.level) + ' scouting' })));
+
+    body.appendChild(el('div', { class: 'note', text: FCM.SCO.verdict(rep) }));
+
+    if (rep.level < 2) {
+      body.appendChild(el('div', { class: 'empty',
+        text: 'Your scouting department cannot tell you more than that. ' +
+          'A better Chief Scout would.' }));
+    }
+
+    if (rep.strengths.length || rep.weaknesses.length) {
+      const sw = el('div');
+      rep.weaknesses.forEach(t => sw.appendChild(
+        el('div', { class: 'concern good', text: '▲ ' + t })));
+      rep.strengths.forEach(t => sw.appendChild(
+        el('div', { class: 'concern bad', text: '▼ ' + t })));
+      body.appendChild(UI.card('Where the game is won', sw));
+    }
+
+    if (rep.danger) {
+      const d = el('div', { class: 'row' });
+      d.appendChild(UI.posPill(rep.danger.pos));
+      const info = el('div', { style: 'flex:1' });
+      info.appendChild(UI.playerLink(rep.danger.player));
+      info.appendChild(el('div', { class: 'tiny mute2',
+        text: rep.danger.player.goals + ' goals, ' + rep.danger.player.assists +
+          ' assists · form ' + (rep.danger.player.form || 6.6).toFixed(1) }));
+      d.appendChild(info);
+      d.appendChild(UI.rating(rep.danger.player.ovr));
+      body.appendChild(UI.card('Danger man', d));
+    }
+
+    if (rep.weakFlank || (rep.doubts && rep.doubts.length)) {
+      const w = el('div');
+      if (rep.weakFlank) {
+        w.appendChild(el('div', { class: 'concern good',
+          text: '▲ Their weakest defensive side is ' + rep.weakFlank.side +
+            ' (rated ' + rep.weakFlank.rating + ').' }));
+      }
+      (rep.doubts || []).forEach(t => w.appendChild(
+        el('div', { class: 'concern', text: '• ' + t })));
+      body.appendChild(UI.card('Vulnerabilities', w));
+    }
+
+    if (rep.advice) {
+      body.appendChild(UI.card('Recommendation',
+        el('div', { class: 'note', text: rep.advice })));
+    }
+
+    if (rep.xi) {
+      const cols = [
+        { key: 'pos', label: 'Pos', nosort: true, render: r => UI.posPill(r.pos) },
+        { key: 'name', label: 'Player', sort: r => r.player.name,
+          render: r => UI.playerLink(r.player) },
+        { hide: 'xs', key: 'form', label: 'Form', num: true,
+          sort: r => r.player.form, render: r => UI.formRating(r.player.form) },
+        { key: 'ovr', label: 'OVR', num: true, sort: r => r.player.ovr,
+          render: r => UI.rating(P.overallAt(r.player, r.pos)) }
+      ];
+      const t = UI.table(cols, rep.xi, { sortKey: 'ovr', sortDesc: true });
+      const card = UI.card('Likely XI', t);
+      card.querySelector('.card-body').style.padding = '0';
+      body.appendChild(card);
+    }
+
+    UI.modal('Report: ' + oppClub.name, body,
+      [el('button', { class: 'btn', text: 'Close', onclick: UI.closeModal })],
+      { badge: UI.badge(oppClub, 'lg') });
   };
 
   /** The pre-match press conference. */

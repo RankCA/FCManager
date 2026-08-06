@@ -23,7 +23,7 @@ Requires Python 3, which macOS already includes.
 
 ## The data
 
-Squads, ratings, potentials, values, wages and contracts come from the **public
+Squads, ratings, potentials, values, wages and contracts come from a **public
 FC 26 dataset** (18,405 players, ratings dated 19 Sep 2025) published at
 [EAFC26-DataHub](https://github.com/ismailoksuz/EAFC26-DataHub). Salah 91, Mbappé 91,
 Bellingham 90 — the real launch ratings.

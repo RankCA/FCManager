@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FC Manager - Season Tests</title>
+<style>
+  body { background:#0e1117; color:#dfe6f0; font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; padding:20px; }
+  h2 { color:#4ade80; font-size:14px; margin:22px 0 8px; border-bottom:1px solid #263041; padding-bottom:5px; }
+  .ok{color:#4ade80}.bad{color:#f87171}.warn{color:#fbbf24}.dim{color:#7b8797}
+  pre{margin:3px 0;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div id="out">Running…</div>
+
+<script>
+// Cache-bust every module so edits are always picked up on reload.
+(function () {
+  var v = '?v=' + Date.now();
+  ['js/core/version.js', 'js/core/settings.js', 'js/core/rng.js', 'js/core/util.js',
+   'js/core/names.js',
+   'js/engine/player.js', 'js/engine/tactics.js', 'js/engine/match.js',
+   'js/engine/competitions.js', 'js/engine/transfers.js', 'js/engine/youth.js',
+   'js/engine/difficulty.js', 'js/engine/finance.js',
+   'js/engine/awards.js', 'js/engine/training.js', 'js/engine/morale.js',
+   'js/engine/nations.js', 'js/engine/international.js', 'js/engine/career.js',
+   'js/engine/halloffame.js',
+   'js/data/db-clubs.js', 'js/data/db-nations.js', 'js/data/db-names.js',
+   'js/data/db-players.js', 'js/data/db-intl.js', 'js/engine/db.js', 'js/engine/game.js',
+   'js/engine/save.js']
+    .forEach(function (f) { document.write('<script src="' + f + v + '"><\/script>'); });
+})();
+</script>
+<script>
+const out=document.getElementById('out'); out.innerHTML='';
+function log(s,c){const p=document.createElement('pre');if(c)p.className=c;p.textContent=s;out.appendChild(p);}
+function h2(s){const e=document.createElement('h2');e.textContent=s;out.appendChild(e);}
+let fails=0;
+function assert(c,l,d){ if(c) log('  PASS  '+l+(d?'   '+d:''),'ok'); else {fails++; log('  FAIL  '+l+(d?'   '+d:''),'bad');} }
+
+const U=FCM.U,P=FCM.P,T=FCM.T,G=FCM.G,C=FCM.C,TR=FCM.TR,Y=FCM.Y;
+
+try {
+h2('1. New game');
+const t0=performance.now();
+// Start at a mid-table Premier League club.
+const seedClub = FCM.DB_CLUBS.find(c=>c.name==='Everton') || FCM.DB_CLUBS[0];
+const s=G.newGame({clubId:seedClub.id, managerName:'Test Boss', seed:4242, startYear:2025});
+log(`  new game in ${(performance.now()-t0).toFixed(0)}ms as ${FCM.DB.clubById[s.userClubId].name}`,'dim');
+assert(!!s,'game created');
+assert(Object.keys(s.competitions).length>20,'competitions created',Object.keys(s.competitions).length);
+assert(!!s.board.expectation,'board expectation set',s.board.expectation);
+
+h2('2. Fixture integrity (before kick-off)');
+const pl=s.competitions['league:13'];
+assert(!!pl,'Premier League exists');
+assert(pl.clubs.length===20,'20 clubs',pl.clubs.length);
+assert(pl.fixtures.length===380,'380 fixtures',pl.fixtures.length);
+assert(pl.matchdays===38,'38 matchdays',pl.matchdays);
+// every club plays 38, 19 home 19 away, never itself
+let fixOk=true, fixDetail='';
+pl.clubs.forEach(id=>{
+  const h=pl.fixtures.filter(f=>f.home===id).length;
+  const a=pl.fixtures.filter(f=>f.away===id).length;
+  if(h!==19||a!==19){fixOk=false;fixDetail+=FCM.DB.clubById[id].name+' H'+h+'/A'+a+' ';}
+});
+assert(fixOk,'every club plays 19 home + 19 away',fixDetail.slice(0,120));
+assert(!pl.fixtures.some(f=>f.home===f.away),'nobody plays themselves');
+// each pairing exactly twice (once each way)
+const pairSeen={};
+pl.fixtures.forEach(f=>{const k=f.home+'v'+f.away;pairSeen[k]=(pairSeen[k]||0)+1;});
+assert(Object.values(pairSeen).every(v=>v===1),'each home/away pairing occurs exactly once');
+// no club plays twice on the same day in the same competition
+let dblBook=0;
+const byDay={};
+G.allFixtures().forEach(f=>{ if(f.day==null)return; (byDay[f.day]=byDay[f.day]||[]).push(f); });
+Object.keys(byDay).forEach(d=>{
+  const seen={};
+  byDay[d].forEach(f=>{
+    if(seen[f.home]||seen[f.away]) dblBook++;
+    seen[f.home]=1; seen[f.away]=1;
+  });
+});
+assert(dblBook===0,'no club double-booked on any day',dblBook+' clashes');
+const days=pl.dates;
+assert(days[0]>=C.SEASON_START-1,'season starts in August',FCM.U.fmtDate(2025,days[0]));
+assert(days[days.length-1]<=C.SEASON_END+1,'season ends in May',FCM.U.fmtDate(2025,days[days.length-1]));
+
+h2('3. Simulate a full season');
+const st=performance.now();
+let userMatches=0, matchDays=0, newSeason=false;
+// Season finances are zeroed at rollover, so snapshot them just before.
+let preRollover=null;
+for(let i=0;i<362;i++){
+  const r=G.advanceDay();
+  if(r.userMatch) userMatches++;
+  if(r.matches.length) matchDays++;
+  if(r.newSeason) newSeason=true;
+  if(!preRollover && s.day>=340) preRollover=JSON.parse(JSON.stringify(s.finances));
+}
+const simMs=performance.now()-st;
+log(`  simulated 362 days in ${(simMs/1000).toFixed(1)}s`,'dim');
+assert(simMs<70000,'a season simulates in reasonable time',(simMs/1000).toFixed(1)+'s');
+
+h2('4. League completed correctly');
+const table=(s.lastTables&&s.lastTables[13])?null:null;
+const finalTable=G.leagueTable(13);
+// after rollover the new season's table is empty, so use lastTables ordering
+assert(!!s.lastTables&&!!s.lastTables[13],'final table recorded for qualification');
+const champId=s.lastTables[13][0];
+log('  Champions: '+FCM.DB.clubById[champId].name,'dim');
+log('  Top 6: '+s.lastTables[13].slice(0,6).map((id,i)=>(i+1)+'. '+FCM.DB.clubById[id].name).join('   '),'dim');
+assert(s.lastTables[13].length===20,'20 clubs in final table',s.lastTables[13].length);
+assert(newSeason,'season rolled over');
+
+h2('5. Youth academy');
+const userClub=FCM.DB.clubById[s.userClubId];
+assert((userClub.youth||[]).length>0,'academy produced prospects',(userClub.youth||[]).length);
+const prospects=(userClub.youth||[]).map(id=>FCM.DB.byId[id]).filter(Boolean);
+if(prospects.length){
+  const best=U.sortBy(prospects,p=>p.pot,true)[0];
+  log(`  best prospect: ${best.full} (${best.nat}) ${best.pos[0]} age ${best.age}, ovr ${best.ovr} pot ${best.pot}`,'dim');
+  assert(prospects.every(p=>p.age>=16&&p.age<=18),'prospects are teenagers',
+    prospects.map(p=>p.age).join(','));
+  assert(prospects.every(p=>p.pot>=p.ovr),'potential >= overall');
+  assert(prospects.every(p=>p.full&&p.full.indexOf('undefined')<0),'prospects have real names');
+  const nats=new Set(prospects.map(p=>p.nat));
+  assert(nats.size>=1,'prospects have nationalities',[...nats].join(', '));
+}
+let totalYouth=0; FCM.DB.clubs.forEach(c=>totalYouth+=(c.youth||[]).length);
+assert(totalYouth>300,'academies ran worldwide',totalYouth+' prospects');
+
+h2('6. Player development across the season');
+let improved=0,declined=0,same=0;
+FCM.DB.players.forEach(p=>{ if(p.isYouth)return; if(p.xp>0.0001||p.ovr>p.startOvr)improved++; });
+// compare against a fresh build to measure real drift
+const fresh={};
+FCM.DB_PLAYERS.rows.forEach(r=>{fresh[r[0]]={ovr:r[4],age:r[6]};});
+let up=0,down=0,unchanged=0,biggest=null;
+FCM.DB.players.forEach(p=>{
+  if(p.isYouth||!fresh[p.id])return;
+  const d=p.ovr-fresh[p.id].ovr;
+  if(d>0){up++; if(!biggest||d>biggest.d)biggest={p:p,d:d};}
+  else if(d<0)down++; else unchanged++;
+});
+log(`  improved ${up}, declined ${down}, unchanged ${unchanged}`,'dim');
+if(biggest)log(`  biggest riser: ${biggest.p.name} (age ${biggest.p.age}) +${biggest.d} -> ${biggest.p.ovr} ovr`,'dim');
+assert(up>200,'many players improved',up);
+assert(down>100,'veterans declined',down);
+assert(biggest&&biggest.d<=14,'no absurd single-season jumps',biggest?('+'+biggest.d):'n/a');
+
+h2('7. Transfers');
+log(`  ${s.transfers.length} completed AI transfers`,'dim');
+assert(s.transfers.length>50,'transfer market active',s.transfers.length);
+if(s.transfers.length){
+  const big=U.sortBy(s.transfers,t=>t.fee,true)[0];
+  log(`  record deal: ${big.name} to ${FCM.DB.clubById[big.to].name} for ${U.money(big.fee)}`,'dim');
+  assert(big.fee<400e6,'no insane fees',U.money(big.fee));
+  const bad=s.transfers.filter(t=>t.fee<0);
+  assert(bad.length===0,'no negative fees');
+}
+// squads stayed sane
+const tooSmall=FCM.DB.clubs.filter(c=>c.squad.length<11);
+const tooBig=FCM.DB.clubs.filter(c=>c.squad.length>40);
+assert(tooSmall.length===0,'no club left short of players',
+  tooSmall.slice(0,3).map(c=>c.name+':'+c.squad.length).join(', '));
+assert(tooBig.length===0,'no bloated squads',
+  tooBig.slice(0,3).map(c=>c.name+':'+c.squad.length).join(', '));
+// nobody in two squads at once
+const seenIn={};let dup=0;
+FCM.DB.clubs.forEach(c=>c.squad.forEach(id=>{ if(seenIn[id])dup++; seenIn[id]=c.id; }));
+assert(dup===0,'no player registered at two clubs',dup);
+
+h2('8. Cups & Europe');
+let cupsWithWinners=0,cupsTotal=0;
+Object.values(s.seasonLog[0]?s.seasonLog[0].history:[]).forEach(()=>{});
+const hist=s.history;
+log('  trophies won: '+hist.map(h=>h.comp+' - '+h.winnerName).join('  |  '),'dim');
+assert(hist.length>0,'trophies were awarded',hist.length);
+const faCup=hist.find(h=>h.comp==='FA Cup');
+assert(!!faCup,'FA Cup produced a winner',faCup?faCup.winnerName:'none');
+
+h2('9. Match stats accumulated');
+const scorers=U.sortBy(FCM.DB.players.filter(p=>p.careerGoals>0),p=>p.careerGoals,true).slice(0,5);
+log('  top scorers: '+scorers.map(p=>p.name+' '+p.careerGoals).join(', '),'dim');
+assert(scorers.length>0,'goals were recorded');
+assert(scorers[0].careerGoals>=15&&scorers[0].careerGoals<70,'golden boot total realistic',
+  scorers[0].careerGoals);
+assert(scorers[0].careerApps>0,'appearances recorded',scorers[0].careerApps);
+
+h2('10. Finances');
+const fin = preRollover || s.finances;
+log(`  wages paid ${U.money(fin.wagesPaid)}, matchday income ${U.money(fin.matchdayIncome)}`,'dim');
+assert(fin.wagesPaid>0,'wages were paid');
+assert(fin.matchdayIncome>0,'matchday income earned');
+assert(s.finances.wagesPaid===0,'season finances reset at rollover',s.finances.wagesPaid);
+
+h2('11. Save round-trip after a full season');
+function census(){
+  const P = FCM.DB.players;
+  return { total:P.length,
+    abroad:P.filter(p=>p.abroad).length,
+    generated:P.filter(p=>p.isNewgen).length,
+    youth:P.filter(p=>p.isYouth).length,
+    clubbed:P.filter(p=>p.clubId).length,
+    squadSum:FCM.DB.clubs.reduce((a,c)=>a+c.squad.length,0),
+    Morocco:+FCM.IN.nationStrength('Morocco').toFixed(1),
+    Oman:+FCM.IN.nationStrength('Oman').toFixed(1) };
+}
+const preSave = census();
+const dupBefore = FCM.DB.players.length !== new Set(FCM.DB.players.map(p=>p.id)).size;
+const blob = JSON.parse(JSON.stringify(FCM.S.serialize()));
+FCM.S.hydrate(blob);
+const postSave = census();
+log('  before ' + JSON.stringify(preSave), 'dim');
+log('  after  ' + JSON.stringify(postSave), 'dim');
+assert(!dupBefore, 'no duplicate player ids before saving');
+assert(FCM.DB.players.length === new Set(FCM.DB.players.map(p=>p.id)).size,
+  'no duplicate player ids after loading');
+// Loading rebuilds the whole static roster, so anyone who retired during the
+// season has to be dropped again rather than resurrected.
+assert(postSave.total === preSave.total, 'player count survives a save/load',
+  preSave.total + ' -> ' + postSave.total);
+assert(postSave.generated === preSave.generated, 'generated players survive',
+  preSave.generated + ' -> ' + postSave.generated);
+// Without the abroad flag persisted, thin nations reload with nobody and
+// their players drift into the transfer market.
+assert(postSave.abroad === preSave.abroad, 'players abroad keep their status',
+  preSave.abroad + ' -> ' + postSave.abroad);
+assert(postSave.Oman === preSave.Oman && postSave.Oman > 0,
+  'a thin nation is still selectable after loading', postSave.Oman);
+assert(postSave.squadSum === preSave.squadSum, 'club squads intact',
+  preSave.squadSum + ' -> ' + postSave.squadSum);
+assert(FCM.DB.players.filter(p=>p.abroad && p.clubId).length === 0,
+  'nobody abroad ends up at a modelled club');
+
+h2(fails===0?'ALL SEASON TESTS PASSED':fails+' TEST(S) FAILED');
+document.title=fails===0?'PASS':'FAIL('+fails+')';
+}catch(err){
+  fails++; log('EXCEPTION: '+err.message,'bad'); log(err.stack,'dim');
+  document.title='ERROR';
+}
+</script>
+</body>
+</html>

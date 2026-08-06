@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Saves the game writes next to itself
+*.fcsave
+
+# Editor / tooling
+.vscode/
+.idea/
+*.swp

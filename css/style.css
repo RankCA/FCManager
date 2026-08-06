@@ -1254,3 +1254,104 @@ tbody tr.row-alert:hover { background: rgba(239,68,68,.15); }
 .br-team { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; }
 .br-team.won { font-weight: 700; }
 .br-team.lost { color: var(--text-mute); }
+
+/* ==========================================================================
+   Phones and small tablets
+
+   The desktop header packs the date, three buttons and two status chips into
+   one unshrinkable row 528px wide, which forced the whole layout to 750px on
+   a 375px screen. Below 760px the header keeps only what you need to read,
+   and the actions move to a fixed bar at the bottom where a thumb can reach
+   them.
+   ========================================================================== */
+/* Declared before the media query, or it would override it. */
+.mobile-actions { display: none; }
+
+@media (max-width: 760px) {
+  /* Nothing may force the page wider than the screen. */
+  html, body { max-width: 100%; overflow-x: hidden; }
+
+  /* The tabs sit inside the header row on desktop. There is no room for
+     that on a phone, so the header wraps and the tabs take their own line. */
+  .topbar {
+    gap: 8px 10px; padding: 7px 11px 0;
+    position: sticky; top: 0; z-index: 40;
+    flex-wrap: wrap;
+  }
+  .tb-club { min-width: 0; flex: 1; overflow: hidden; order: 1; }
+  .tb-club .tb-name, .tb-club .tb-sub {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tb-right { gap: 8px; flex: none; margin-left: auto; order: 2; }
+  .tb-date { margin-right: 0; text-align: right; }
+  .tabs {
+    order: 3; flex: 0 0 100%; width: 100%;
+    margin: 0 -11px; padding: 0 11px;
+    /* Fade the right edge so it reads as scrollable rather than cut off. */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+  }
+  .tb-date .tb-name { font-size: 12.5px; }
+  /* Actions live in the bottom bar on a phone; status chips are noise there. */
+  .tb-right #btn-advance,
+  .tb-right #btn-simnext,
+  .tb-right #btn-save,
+  .autosave-chip, .version-chip { display: none; }
+
+  .tab { padding: 9px 11px; font-size: 13px; }
+
+  /* Room for the fixed action bar, plus the home indicator on iOS. */
+  .view {
+    padding: 11px;
+    padding-bottom: calc(74px + env(safe-area-inset-bottom));
+  }
+
+  .mobile-actions {
+    display: flex; gap: 8px; align-items: center;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+    padding: 9px 11px calc(9px + env(safe-area-inset-bottom));
+    background: var(--bg-2); border-top: 1px solid var(--line);
+  }
+  /* The modal backdrop is translucent, so a bright green Continue button
+     glows through it. Take the bar away while a dialog is up. */
+  body:has(#modal:not(.hidden)) .mobile-actions { display: none; }
+  .mobile-actions .btn { flex: 1; min-height: 44px; font-size: 13.5px; }
+  .mobile-actions .btn-icon { flex: none; width: 46px; padding: 0; }
+
+  /* Cards and typography tighten up, but stay readable. */
+  .card-body { padding: 11px; }
+  .card-head { padding: 9px 11px; }
+  .grid { gap: 11px; }
+  .stack { gap: 11px; }
+
+  /* Dialogs go full-screen — a centred box wastes a phone. */
+  .modal-box {
+    max-height: 100%; max-width: 100%; width: 100%;
+    border-radius: 0; border-left: none; border-right: none;
+  }
+  .modal { padding: 0; align-items: stretch; }
+  .modal-body { padding: 12px; }
+  .modal-foot { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
+  .modal-foot .btn { min-height: 44px; }
+
+  /* Tables: drop the columns that are nice-to-have, keep the ones you pick on. */
+  th, td { padding: 8px 7px; font-size: 12.5px; }
+  .hide-sm { display: none !important; }
+
+  /* Touch targets. A 28px button is a coin toss with a thumb. */
+  .btn { min-height: 38px; }
+  .seg-btn { min-height: 38px; }
+  select, input[type="text"], input[type="number"] { min-height: 40px; font-size: 16px; }
+
+  .pitch { max-width: 100%; }
+  .group-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 420px) {
+  .tb-club .tb-sub { display: none; }
+  .tb-date .tb-sub { display: none; }
+  .view { padding: 9px; padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  .card-body { padding: 9px; }
+  th, td { padding: 7px 5px; font-size: 12px; }
+  .hide-xs { display: none !important; }
+}

@@ -777,10 +777,10 @@
           sort: p => (FCM.DB.clubById[p.clubId] || {}).name || p.foreignClub || '',
           render: p => el('span', { class: 'small mute2',
             text: (FCM.DB.clubById[p.clubId] || {}).name || p.foreignClub || 'Free agent' }) },
-        { key: 'age', label: 'Age', num: true },
+        { hide: 'xs', key: 'age', label: 'Age', num: true },
         { key: 'ovr', label: 'OVR', num: true, render: p => UI.rating(p.ovr) },
-        { key: 'form', label: 'Form', num: true, render: p => UI.formRating(p.form) },
-        { key: 'fitness', label: 'Fit', num: true,
+        { hide: 'xs', key: 'form', label: 'Form', num: true, render: p => UI.formRating(p.form) },
+        { hide: 'xs', key: 'fitness', label: 'Fit', num: true,
           render: p => Math.round(p.fitness) + '%' }
       ];
       const t = UI.table(cols, pool, { sortKey: 'ovr', sortDesc: true,
@@ -837,27 +837,27 @@
             title: 'Offers blocked' }));
           return r;
         } },
-      { key: 'age', label: 'Age', num: true },
+      { hide: 'xs', key: 'age', label: 'Age', num: true },
       { key: 'ovr', label: 'OVR', num: true, render: p => UI.rating(p.ovr) },
-      { key: 'pot', label: 'POT', num: true, render: p =>
+      { hide: 'xs', key: 'pot', label: 'POT', num: true, render: p =>
           el('span', { class: 'muted', text: FCM.ST.get('showPotential') ? p.pot : '—' }) },
-      { key: 'form', label: 'Form', num: true, render: p => UI.formRating(p.form) },
-      { key: 'fitness', label: 'Fit', num: true, render: p =>
+      { hide: 'xs', key: 'form', label: 'Form', num: true, render: p => UI.formRating(p.form) },
+      { hide: 'xs', key: 'fitness', label: 'Fit', num: true, render: p =>
           el('span', { text: Math.round(p.fitness) + '%',
             class: p.fitness < 60 ? 'bad' : '' }) },
-      { key: 'apps', label: 'Apps', num: true },
+      { hide: 'xs', key: 'apps', label: 'Apps', num: true },
       { key: 'goals', label: 'Gls', num: true },
-      { key: 'assists', label: 'Ast', num: true },
-      { key: 'avg', label: 'Avg', num: true, sort: p => P.avgRating(p),
+      { hide: 'xs', key: 'assists', label: 'Ast', num: true },
+      { hide: 'xs', key: 'avg', label: 'Avg', num: true, sort: p => P.avgRating(p),
         render: p => p.seasonRatings.length ? UI.formRating(P.avgRating(p)) : el('span', { class: 'mute2', text: '—' }) },
-      { key: 'value', label: 'Value', num: true, render: p => U.money(p.value) },
-      { key: 'wage', label: 'Wage', num: true, render: p => U.money(p.wage) },
-      { key: 'contractUntil', label: 'Exp', num: true, render: p => {
+      { hide: 'sm', key: 'value', label: 'Value', num: true, render: p => U.money(p.value) },
+      { hide: 'sm', key: 'wage', label: 'Wage', num: true, render: p => U.money(p.wage) },
+      { hide: 'sm', key: 'contractUntil', label: 'Exp', num: true, render: p => {
           const left = p.contractUntil - p.seasonYear;
           return el('span', { text: p.contractUntil,
             class: left <= 1 ? 'pill pill-warn' : '' });
         } },
-      { key: 'role', label: 'Role', nosort: true, render: p =>
+      { hide: 'sm', key: 'role', label: 'Role', nosort: true, render: p =>
           el('span', { class: 'small muted', text: P.roleLabel(p, ovrs) }) }
     ];
 
@@ -1740,14 +1740,14 @@
         { key: 'name', label: 'Club', sort: r => (FCM.DB.clubById[r.club] || {}).name || '',
           render: r => UI.clubCell(FCM.DB.clubById[r.club]) },
         { key: 'p', label: 'P', num: true },
-        { key: 'w', label: 'W', num: true },
-        { key: 'd', label: 'D', num: true },
-        { key: 'l', label: 'L', num: true },
-        { key: 'gf', label: 'GF', num: true },
-        { key: 'ga', label: 'GA', num: true },
+        { hide: 'xs', key: 'w', label: 'W', num: true },
+        { hide: 'xs', key: 'd', label: 'D', num: true },
+        { hide: 'xs', key: 'l', label: 'L', num: true },
+        { hide: 'sm', key: 'gf', label: 'GF', num: true },
+        { hide: 'sm', key: 'ga', label: 'GA', num: true },
         { key: 'gd', label: 'GD', num: true, render: r => (r.gd > 0 ? '+' : '') + r.gd },
         { key: 'pts', label: 'Pts', num: true, render: r => el('b', { text: r.pts }) },
-        { key: 'form', label: 'Form', nosort: true, render: r => UI.formDots(r.form) }
+        { hide: 'sm', key: 'form', label: 'Form', nosort: true, render: r => UI.formDots(r.form) }
       ];
       holder.innerHTML = '';
       const t = UI.table(cols, rows, { sortKey: 'pos', sortDesc: false,
@@ -1924,10 +1924,10 @@
         const lcols = [
           { key: 'pos', label: 'Pos', nosort: true, render: p => UI.posPill(p.pos[0]) },
           { key: 'name', label: 'Player', render: p => UI.playerLink(p) },
-          { key: 'age', label: 'Age', num: true },
+          { hide: 'xs', key: 'age', label: 'Age', num: true },
           { key: 'ovr', label: 'OVR', num: true, render: p => UI.rating(p.ovr) },
-          { key: 'pot', label: 'POT', num: true, render: p => el('span', { class: 'muted', text: p.pot }) },
-          { key: 'wage', label: 'Wage', num: true, render: p => U.money(p.wage) },
+          { hide: 'xs', key: 'pot', label: 'POT', num: true, render: p => el('span', { class: 'muted', text: p.pot }) },
+          { hide: 'sm', key: 'wage', label: 'Wage', num: true, render: p => U.money(p.wage) },
           { key: 'status', label: 'Status', nosort: true, render: p => {
               if (p.loanedTo) {
                 const at = FCM.DB.clubById[p.loanedTo];
@@ -1987,17 +1987,18 @@
             else if (p.transferListed) r.appendChild(el('span', { class: 'pill pill-warn', text: 'Listed' }));
             return r;
           } },
-        { key: 'club', label: 'Club', sort: p => (FCM.DB.clubById[p.clubId] || {}).name || '',
+        { hide: 'xs', key: 'club', label: 'Club',
+          sort: p => (FCM.DB.clubById[p.clubId] || {}).name || '',
           render: p => p.clubId ? UI.clubCell(FCM.DB.clubById[p.clubId])
             : el('span', { class: 'mute2', text: 'Free agent' }) },
-        { key: 'nat', label: 'Nation' },
-        { key: 'age', label: 'Age', num: true },
+        { hide: 'xs', key: 'nat', label: 'Nation' },
+        { hide: 'xs', key: 'age', label: 'Age', num: true },
         { key: 'ovr', label: 'OVR', num: true, render: p => UI.rating(p.ovr) },
-        { key: 'pot', label: 'POT', num: true, render: p => el('span', { class: 'muted', text: p.pot }) },
+        { hide: 'xs', key: 'pot', label: 'POT', num: true, render: p => el('span', { class: 'muted', text: p.pot }) },
         { key: 'value', label: 'Fee', num: true,
           render: p => p.clubId ? U.money(p.value) : el('span', { style: 'color:var(--accent)', text: 'Free' }) },
-        { key: 'wage', label: 'Wage', num: true, render: p => U.money(p.wage) },
-        { key: 'exp', label: 'Exp', num: true, sort: p => p.contractUntil,
+        { hide: 'sm', key: 'wage', label: 'Wage', num: true, render: p => U.money(p.wage) },
+        { hide: 'sm', key: 'exp', label: 'Exp', num: true, sort: p => p.contractUntil,
           render: p => p.clubId ? String(p.contractUntil) : '—' },
         { key: 'act', label: '', nosort: true, render: p => {
             const box = el('div', { class: 'row', style: 'gap:4px;justify-content:flex-end' });
@@ -2326,8 +2327,8 @@
           if (p.scoutedFrom) r.appendChild(el('span', { class: 'pill', text: '🔍', title: 'Scouted in ' + p.scoutedFrom }));
           return r;
         } },
-      { key: 'nat', label: 'Nation' },
-      { key: 'age', label: 'Age', num: true, render: p =>
+      { hide: 'xs', key: 'nat', label: 'Nation' },
+      { hide: 'xs', key: 'age', label: 'Age', num: true, render: p =>
           el('span', { class: p.age >= 18 ? 'pill pill-warn' : '', text: p.age }) },
       { key: 'ovr', label: 'OVR', num: true, render: p => UI.rating(p.ovr) },
       { key: 'pot', label: 'Ceiling', num: true, sort: p => p.pot, render: p => {
@@ -2537,9 +2538,9 @@
           { key: 'name', label: 'Club', sort: r => (FCM.DB.clubById[r.club] || {}).name || '',
             render: r => UI.clubCell(FCM.DB.clubById[r.club]) },
           { key: 'p', label: 'P', num: true },
-          { key: 'w', label: 'W', num: true },
-          { key: 'd', label: 'D', num: true },
-          { key: 'l', label: 'L', num: true },
+          { hide: 'xs', key: 'w', label: 'W', num: true },
+          { hide: 'xs', key: 'd', label: 'D', num: true },
+          { hide: 'xs', key: 'l', label: 'L', num: true },
           { key: 'gd', label: 'GD', num: true, render: r => (r.gd > 0 ? '+' : '') + r.gd },
           { key: 'pts', label: 'Pts', num: true, render: r => el('b', { text: r.pts }) }
         ];
@@ -2782,7 +2783,7 @@
     const cols = [
       { key: 'name', label: 'Player', render: p => UI.playerLink(p) },
       { key: 'ovr', label: 'OVR', num: true, render: p => UI.rating(p.ovr) },
-      { key: 'wage', label: 'Wage', num: true, render: p => U.wage(p.wage) },
+      { hide: 'sm', key: 'wage', label: 'Wage', num: true, render: p => U.wage(p.wage) },
       { key: 'contractUntil', label: 'Until', num: true }
     ];
     const t = UI.table(cols, top, { sortKey: 'wage', sortDesc: true });
@@ -3226,9 +3227,9 @@
       const cols = [
         { key: 'pos', label: 'Pos', nosort: true, render: p => UI.posPill(p.pos[0]) },
         { key: 'name', label: 'Player', render: p => UI.playerLink(p) },
-        { key: 'age', label: 'Age', num: true },
+        { hide: 'xs', key: 'age', label: 'Age', num: true },
         { key: 'ovr', label: 'OVR', num: true, render: p => UI.rating(p.ovr) },
-        { key: 'pot', label: 'POT', num: true, render: p => el('span', { class: 'muted', text: p.pot }) },
+        { hide: 'xs', key: 'pot', label: 'POT', num: true, render: p => el('span', { class: 'muted', text: p.pot }) },
         { key: 'focus', label: 'Individual focus', nosort: true, render: p => {
             const sel = el('select', { style: 'font-size:12px;padding:3px 6px' });
             TN.INDIVIDUAL.forEach(x => sel.appendChild(el('option', { value: x.id, text: x.label })));
@@ -3727,9 +3728,9 @@
     const cols = [
       { key: 'pos', label: 'Pos', nosort: true, render: p => UI.posPill(p.pos[0]) },
       { key: 'name', label: 'Name', render: p => UI.playerLink(p) },
-      { key: 'age', label: 'Age', num: true },
+      { hide: 'xs', key: 'age', label: 'Age', num: true },
       { key: 'ovr', label: 'OVR', num: true, render: p => UI.rating(p.ovr) },
-      { key: 'value', label: 'Value', num: true, render: p => U.money(p.value) }
+      { hide: 'sm', key: 'value', label: 'Value', num: true, render: p => U.money(p.value) }
     ];
     body.appendChild(UI.table(cols, squad, { sortKey: 'ovr', sortDesc: true }));
     UI.modal(club.name, body, [el('button', { class: 'btn', text: 'Close', onclick: UI.closeModal })],
@@ -3781,7 +3782,7 @@
           sort: p => (FCM.DB.clubById[p.clubId] || {}).name || p.foreignClub || '',
           render: p => el('span', { class: 'small mute2',
             text: (FCM.DB.clubById[p.clubId] || {}).name || p.foreignClub || 'Free agent' }) },
-        { key: 'age', label: 'Age', num: true },
+        { hide: 'xs', key: 'age', label: 'Age', num: true },
         { key: 'ovr', label: 'OVR', num: true, render: p => UI.rating(p.ovr) }
       ];
       body.appendChild(UI.table(cols, squad, { sortKey: 'ovr', sortDesc: true }));

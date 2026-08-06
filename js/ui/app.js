@@ -231,16 +231,22 @@
     document.getElementById('boot').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
 
-    document.getElementById('btn-advance').addEventListener('click', advance);
-    const simBtn = document.getElementById('btn-simnext');
-    if (simBtn) {
-      simBtn.addEventListener('click', function () {
-        const next = G.nextUserFixture();
-        if (next) SC.simTo(next.day);
-        else UI.toast('No upcoming fixtures.', 'warn');
-      });
+    function simToNext() {
+      const next = G.nextUserFixture();
+      if (next) SC.simTo(next.day);
+      else UI.toast('No upcoming fixtures.', 'warn');
     }
-    document.getElementById('btn-save').addEventListener('click', App.saveMenu);
+    // The header buttons and the phone action bar drive the same three things.
+    function bind(id, fn) {
+      const b = document.getElementById(id);
+      if (b) b.addEventListener('click', fn);
+    }
+    bind('btn-advance', advance);
+    bind('m-advance', advance);
+    bind('btn-simnext', simToNext);
+    bind('m-simnext', simToNext);
+    bind('btn-save', App.saveMenu);
+    bind('m-save', App.saveMenu);
 
     const chip = document.getElementById('version-chip');
     if (chip) { chip.textContent = FCM.versionString(); chip.title = FCM.versionLong(); }

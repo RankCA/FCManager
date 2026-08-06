@@ -227,6 +227,14 @@
   /**
    * cols: [{ key, label, num, cls, nosort, render(row), sort(row) }]
    */
+  /**
+   * Columns can drop out on small screens rather than forcing a phone to
+   * scroll a table sideways. `hide: 'sm'` goes at 760px, `hide: 'xs'` at 420.
+   */
+  function hideClass(c) {
+    return c.hide === 'xs' ? 'hide-xs' : (c.hide === 'sm' ? 'hide-sm' : '');
+  }
+
   UI.table = function (cols, rows, opts) {
     const o = opts || {};
     const wrap = U.el('div', { class: 'table-wrap' });
@@ -239,7 +247,8 @@
 
     cols.forEach(c => {
       const th = U.el('th', {
-        class: (c.num ? 't-num ' : '') + (c.center ? 't-c ' : '') + (c.nosort ? 'nosort' : ''),
+        class: (c.num ? 't-num ' : '') + (c.center ? 't-c ' : '') +
+          (c.nosort ? 'nosort ' : '') + hideClass(c),
         text: c.label
       });
       if (!c.nosort) {
@@ -279,7 +288,8 @@
       list.forEach((r, i) => {
         const tr = U.el('tr', { class: (o.rowClass ? o.rowClass(r) : '') + (o.onRow ? ' clickable' : '') });
         cols.forEach(c => {
-          const td = U.el('td', { class: (c.num ? 't-num ' : '') + (c.center ? 't-c ' : '') + (c.cls || '') });
+          const td = U.el('td', { class: (c.num ? 't-num ' : '') + (c.center ? 't-c ' : '') +
+            (c.cls || '') + ' ' + hideClass(c) });
           const v = c.render ? c.render(r, i) : r[c.key];
           if (v === null || v === undefined) td.textContent = '';
           else if (typeof v === 'object') td.appendChild(v);

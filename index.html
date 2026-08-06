@@ -108,6 +108,14 @@
   </header>
 
   <main id="view" class="view"></main>
+
+  <!-- Phone-only action bar. The header's buttons move down here, where a
+       thumb can reach them; CSS hides it on anything wider. -->
+  <div class="mobile-actions" id="mobile-actions">
+    <button class="btn btn-primary" id="m-advance">Continue</button>
+    <button class="btn" id="m-simnext">Sim to match</button>
+    <button class="btn btn-ghost btn-icon" id="m-save" title="Save game" aria-label="Save game">💾</button>
+  </div>
 </div>
 
 <!-- ============ Modal ============ -->

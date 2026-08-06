@@ -126,6 +126,24 @@ academy, staff, stadium, records and awards.
 - Individual programmes per player (shooting, passing, pace…), which work
   fastest on under-23s
 
+**Man management**
+- **Promises are commitments.** Promise regular football, a starting place or
+  a contract review, and you are held to it — measured against the minutes he
+  actually gets. Keep your word and he trusts you more; break it and his
+  morale drops thirty points and he remembers. Break it twice and he asks to
+  leave
+- **Conversations are a read, not a button.** Praising a player in poor form
+  rings hollow and costs you. Criticising one who is carrying the side is
+  taken badly. Ambitious players swing hardest either way, and there is a
+  fortnight's cooldown so talking keeps meaning something
+- **The dressing room has a hierarchy.** Senior, well-known players carry more
+  weight and pull the squad's mood with them — a furious captain does far more
+  damage than a furious fifth-choice full-back
+- **Press conferences** before matches, with questions drawn from what is
+  actually happening: the next opponent, a bad run, an unsettled player. Every
+  answer trades squad morale against board confidence, and talking a game up
+  means the board judges that result harder
+
 **Backroom staff**
 - Hire a Head Coach, Academy Director, Chief Scout, Head Physio and Fitness
   Coach, each rated 1–5 with a weekly wage
@@ -190,6 +208,13 @@ academy, staff, stadium, records and awards.
   16-team field, exactly as the real tournament does
 - Search any country by name to see its call-up squad, world ranking and
   honours
+- **Qualifying runs across the club season.** Every nation is drawn into a
+  group and plays a round robin over ten matchdays at six international
+  breaks. Group winners go through, then the best runners-up, then third
+  places where a confederation still has places to fill. Places are
+  apportioned so they sum to the field exactly. Fields are no longer just
+  the world rankings — in testing both Germany and Portugal missed a World
+  Cup. Your own campaign sits on the Home tab with the live group table
 - Tournaments **play out across the summer on your Home tab** — seeded groups
   of four with live tables over three matchdays, then a full knockout bracket
   you can follow round by round. Your nation is highlighted throughout, and

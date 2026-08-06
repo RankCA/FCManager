@@ -20,7 +20,8 @@
   ['js/core/version.js', 'js/core/settings.js', 'js/core/tags.js', 'js/core/rng.js',
    'js/core/util.js', 'js/core/names.js',
    'js/engine/player.js', 'js/engine/tactics.js', 'js/engine/match.js',
-   'js/engine/youth.js', 'js/engine/finance.js', 'js/engine/nations.js',
+   'js/engine/youth.js', 'js/engine/finance.js', 'js/engine/morale.js',
+   'js/engine/manmgmt.js', 'js/engine/nations.js',
    'js/engine/international.js',
    'js/data/db-clubs.js', 'js/data/db-nations.js', 'js/data/db-names.js',
    'js/data/db-players.js', 'js/data/db-intl.js', 'js/engine/db.js']
@@ -511,6 +512,69 @@ FCM.G.state = { tactics: {} };
   });
 });
 FCM.G.state = null;
+
+// ----------------------------------------------------------- man management
+h2('15. Man management');
+const MM = FCM.MM;
+const mmClub = DB.clubs.find(c => c.name === 'Liverpool');
+const mmState = { day: 100, season: 2025, board: { confidence: 70 } };
+const mmSquad = FCM.DB.squadOf(mmClub);
+
+// A promise you never honour must actually cost you.
+const broken = mmSquad[3];
+broken.minutes = 0; broken.morale = 70; broken.promise = null; broken.trustBroken = 0;
+MM.promise(broken, 'gametime', mmState);
+assert(!!broken.promise, 'a promise is recorded');
+const afterPromise = broken.morale;
+assert(afterPromise > 70, 'making a promise lifts him', afterPromise);
+const midState = { day: 100 + 7 * 13, season: 2025, board: { confidence: 70 } };
+assert(MM.judgePromise(broken, mmClub, midState) === 'broken',
+  'never playing him breaks the promise');
+MM.reviewPromises(mmClub, midState);
+assert(broken.morale < afterPromise - 20, 'breaking your word craters his morale',
+  Math.round(afterPromise) + ' -> ' + Math.round(broken.morale));
+assert(broken.trustBroken === 1, 'he remembers it');
+
+// And one you do honour.
+const kept = mmSquad[4];
+kept.minutes = 0; kept.morale = 70; kept.promise = null; kept.trustBroken = 0;
+MM.promise(kept, 'gametime', mmState);
+kept.minutes = 90 * 12;   // played every week of the window
+assert(MM.judgePromise(kept, mmClub, midState) === 'kept',
+  'playing him regularly keeps the promise');
+
+// A second broken promise pushes him out the door.
+broken.promise = null;
+MM.promise(broken, 'gametime', midState);
+broken.minutes = 0;
+const lateState = { day: midState.day + 7 * 13, season: 2025, board: { confidence: 70 } };
+MM.reviewPromises(mmClub, lateState);
+assert(broken.trustBroken >= 2 && broken.transferRequested,
+  'break your word twice and he asks to leave', 'trustBroken=' + broken.trustBroken);
+
+// Conversations are a read, not a free morale button.
+const chatRng = new FCM.RNG(5);
+const inForm = mmSquad[6];
+inForm.form = 7.5; inForm.morale = 65; inForm.lastChatDay = null;
+const praised = MM.chat(inForm, 'praise', chatRng, mmState);
+assert(praised.good && praised.delta > 0, 'praising a player in form lifts him',
+  praised.delta);
+const alsoInForm = mmSquad[7];
+alsoInForm.form = 7.5; alsoInForm.morale = 65; alsoInForm.lastChatDay = null;
+const nagged = MM.chat(alsoInForm, 'criticise', chatRng, mmState);
+assert(!nagged.good && nagged.delta < 0, 'criticising a player in form backfires',
+  nagged.delta);
+assert(!MM.canChat(inForm, mmState), 'you cannot talk to him again immediately');
+assert(MM.canChat(inForm, { day: mmState.day + 20 }), 'a fortnight later you can');
+
+// Influence: a senior star must carry more weight than a squad player.
+const room = MM.dressingRoom(mmClub);
+const best = U.sortBy(mmSquad, p => p.ovr, true)[0];
+const worst = U.sortBy(mmSquad, p => p.ovr, false)[0];
+assert(MM.influence(best) > MM.influence(worst),
+  'the best player carries more weight in the room',
+  MM.influence(best) + ' vs ' + MM.influence(worst));
+assert(room.length === mmSquad.length, 'every player is placed in the room');
 
 h2(fails === 0 ? 'ALL TESTS PASSED' : fails + ' TEST(S) FAILED');
 document.title = fails === 0 ? 'PASS' : 'FAIL(' + fails + ')';

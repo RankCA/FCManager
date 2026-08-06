@@ -16,7 +16,8 @@
     'notForSale', 'sellOnPct', 'sellOnOwedTo', 'releaseClause', 'appearanceFee',
     'goalBonus', 'squadRole', 'loanedTo', 'loanFrom', 'loanUntil', 'loanWageShare',
     'freeSince', 'trainingFocus', 'loanListed', 'loanOptionToBuy',
-    'transferRequested', 'promisedGameTime', 'tag'];
+    'transferRequested', 'promisedGameTime', 'tag',
+    'promise', 'trustBroken', 'lastChatDay'];
 
   // Floats carry ~15 digits in JSON; two decimals is plenty and much smaller.
   const ROUND2 = { form: 1, fitness: 1, morale: 1, xp: 1, valMult: 1, wageMult: 1 };
@@ -118,6 +119,7 @@
       career: s.career, internationals: s.internationals, ballonDor: s.ballonDor,
       activeTournaments: s.activeTournaments, qualifying: s.qualifying,
       hallOfFame: s.hallOfFame,
+      pressBravado: s.pressBravado, lastPressDay: s.lastPressDay,
       seekingJob: s.seekingJob,
       capacities: FCM.DB.clubs.map(c => [c.id, c.capacity]),
       inbox: s.inbox.slice(0, 80), transfers: s.transfers.slice(-250),
@@ -321,6 +323,7 @@
       ballonDor: d.ballonDor || [],
       activeTournaments: d.activeTournaments || [],
       qualifying: d.qualifying || [],
+      pressBravado: d.pressBravado || 0, lastPressDay: d.lastPressDay || null,
       hallOfFame: d.hallOfFame || [],
       seekingJob: !!d.seekingJob,
       lastTables: d.lastTables, unreadCount: d.unreadCount || 0,

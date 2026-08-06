@@ -1356,3 +1356,10 @@ tbody tr.row-alert:hover { background: rgba(239,68,68,.15); }
   th, td { padding: 7px 5px; font-size: 12px; }
   .hide-xs { display: none !important; }
 }
+
+/* Press conference */
+.press-q {
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: 10px; padding: 12px 13px;
+}
+.press-text { font-size: 14px; font-style: italic; color: var(--text); line-height: 1.5; }

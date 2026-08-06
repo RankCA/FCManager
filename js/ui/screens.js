@@ -91,6 +91,17 @@
     const qCard = SC.qualifyingCard();
     if (qCard) left.appendChild(qCard);
 
+    // --- The press want a word before the next game ---
+    if (SC.pressAvailable()) {
+      const pb = el('div');
+      pb.appendChild(el('div', { class: 'small', style: 'margin-bottom:9px',
+        text: 'The media are waiting. What you say moves the dressing room ' +
+          'and the boardroom, so pick your words.' }));
+      pb.appendChild(el('button', { class: 'btn btn-primary', text: '🎙 Face the press',
+        onclick: function () { SC.pressConference(); } }));
+      left.appendChild(UI.card('Press Conference', pb));
+    }
+
     // --- Inbox ---
     const inbox = el('div');
     const items = s.inbox.slice(0, 14);
@@ -2877,6 +2888,140 @@
   // =====================================================================
   // Player profile
   // =====================================================================
+  /**
+   * A conversation with one of your players. Reading him right lifts him;
+   * reading him wrong does real damage, so this is a judgement, not a button.
+   */
+  SC.playerTalk = function (p) {
+    const s = S(), MM = FCM.MM;
+    const body = el('div');
+
+    const head = el('div', { class: 'kv', style: 'margin-bottom:12px' });
+    [['Morale', UI.moraleLabel ? UI.moraleLabel(p.morale) : Math.round(p.morale) + '/100'],
+     ['Form', (p.form || 6.6).toFixed(1)],
+     ['Minutes this season', U.num(p.minutes || 0)],
+     ['Outstanding promise', p.promise
+       ? MM.PROMISES[p.promise.kind].label + ' (due ' +
+         Math.max(0, Math.ceil((p.promise.dueDay - s.day) / 7)) + ' wks)'
+       : 'None']
+    ].forEach(([k, v]) => {
+      head.appendChild(el('div', { class: 'k', text: k }));
+      head.appendChild(el('div', { class: 'v', text: v }));
+    });
+    if (p.trustBroken) {
+      head.appendChild(el('div', { class: 'k', text: 'Trust' }));
+      head.appendChild(el('div', { class: 'v',
+        text: 'Broken ' + p.trustBroken + ' time' + (p.trustBroken === 1 ? '' : 's') }));
+    }
+    body.appendChild(head);
+
+    const cooled = MM.canChat(p, s);
+    if (!cooled) {
+      body.appendChild(el('div', { class: 'note',
+        text: 'You spoke to him recently. Give him a couple of weeks before ' +
+          'going again — constant talks stop meaning anything.' }));
+    }
+
+    const box = el('div', { class: 'stack' });
+    Object.keys(MM.CHATS).forEach(kind => {
+      const spec = MM.CHATS[kind];
+      const b = el('button', { class: 'btn', text: spec.label,
+        style: 'justify-content:flex-start' });
+      if (!cooled) b.disabled = true;
+      b.addEventListener('click', function () {
+        const r = MM.chat(p, kind, G().rng, s);
+        UI.closeModal();
+        UI.toast(r.text + ' (' + (r.delta > 0 ? '+' : '') + r.delta + ' morale)',
+          r.good ? 'good' : 'warn');
+        FCM.App.render();
+      });
+      box.appendChild(b);
+    });
+
+    // Promises are the serious end of the conversation.
+    if (!p.promise) {
+      box.appendChild(el('div', { class: 'section-title', text: 'Make a promise' }));
+      Object.keys(MM.PROMISES).forEach(kind => {
+        const spec = MM.PROMISES[kind];
+        const b = el('button', { class: 'btn', style: 'justify-content:flex-start',
+          text: '🤝 ' + spec.label + ' (' + spec.weeks + ' weeks)' });
+        b.addEventListener('click', function () {
+          UI.confirm('Promise ' + p.name + ' ' + spec.label.toLowerCase() + '?',
+            'You will be held to this for ' + spec.weeks + ' weeks. Breaking it ' +
+            'costs far more than never promising at all.',
+            function () {
+              const line = MM.promise(p, kind, s);
+              UI.toast(line);
+              FCM.App.render();
+            }, 'Give my word');
+        });
+        box.appendChild(b);
+      });
+    }
+    body.appendChild(box);
+
+    UI.modal('Talk to ' + p.name, body,
+      [el('button', { class: 'btn', text: 'Close', onclick: UI.closeModal })]);
+  };
+
+  /**
+   * The press turn up in the few days before a match, and once you have
+   * spoken they leave you alone until the next one.
+   */
+  SC.pressAvailable = function () {
+    const s = S();
+    if (FCM.ST.get('pressConferences') === false) return false;
+    const next = G().nextUserFixture();
+    if (!next || next.day - s.day > 3) return false;
+    // One conference per fixture.
+    return !(s.lastPressDay !== undefined && s.lastPressDay !== null &&
+      s.lastPressDay >= s.day - 3 && s.lastPressDay <= s.day);
+  };
+
+  /** The pre-match press conference. */
+  SC.pressConference = function () {
+    const s = S(), club = myClub(), MM = FCM.MM;
+    const qs = MM.pressQuestions(s, club, G().rng);
+    if (!qs.length) {
+      UI.toast('Nothing the press want to ask today.', 'warn');
+      return;
+    }
+    const body = el('div', { class: 'stack' });
+    let answered = 0;
+
+    qs.forEach(q => {
+      const card = el('div', { class: 'press-q' });
+      card.appendChild(el('div', { class: 'press-text', text: '“' + q.text + '”' }));
+      const opts = el('div', { class: 'stack', style: 'margin-top:9px' });
+      q.answers.forEach(a => {
+        const b = el('button', { class: 'btn', style: 'justify-content:flex-start',
+          text: a.text });
+        b.addEventListener('click', function () {
+          if (card.dataset.done) return;
+          card.dataset.done = '1';
+          const note = MM.answerPress(s, club, a);
+          U.qsa('button', opts).forEach(x => { x.disabled = true; });
+          b.classList.add('btn-primary');
+          card.appendChild(el('div', { class: 'tiny mute2', style: 'margin-top:8px',
+            text: note }));
+          answered++;
+          if (answered >= qs.length) {
+            s.lastPressDay = s.day;
+            FCM.App.refreshTabs && FCM.App.refreshTabs();
+          }
+        });
+        opts.appendChild(b);
+      });
+      card.appendChild(opts);
+      body.appendChild(card);
+    });
+
+    UI.modal('Press conference', body,
+      [el('button', { class: 'btn', text: 'Done', onclick: function () {
+        UI.closeModal(); FCM.App.render();
+      } })]);
+  };
+
   UI.playerProfile = function (p) {
     const club = FCM.DB.clubById[p.clubId];
     const isMine = p.clubId === S().userClubId;
@@ -3152,6 +3297,10 @@
       }));
       foot.unshift(el('button', { class: 'btn', text: 'Offer new contract',
         onclick: function () { UI.closeModal(); SC.negotiateContract(p); } }));
+      if (!p.isYouth) {
+        foot.unshift(el('button', { class: 'btn', text: '💬 Talk',
+          onclick: function () { UI.closeModal(); SC.playerTalk(p); } }));
+      }
       if (p.isYouth) {
         foot.unshift(el('button', { class: 'btn btn-primary', text: 'Promote to first team',
           onclick: function () {
@@ -3596,6 +3745,8 @@
       'Tint fixtures by tournament so cups stand out.');
     toggleRow(gameBox, 'fullMoney', 'Show money in full',
       '£10,228,900 instead of £10.2M.', function () { FCM.App.render(); });
+    toggleRow(gameBox, 'pressConferences', 'Press conferences',
+      'Face the media before matches. Turn off to skip them entirely.');
     toggleRow(gameBox, 'confirmBigDecisions', 'Confirm big decisions',
       'Ask before releasing players and other one-way actions.');
     toggleRow(gameBox, 'autosave', 'Autosave',

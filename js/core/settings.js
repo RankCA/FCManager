@@ -27,7 +27,8 @@
     confirmBigDecisions: true,
     density: 'comfortable',  // comfortable | compact
     showCompColours: true,
-    fullMoney: false         // £10,228,900 rather than £10.2M
+    fullMoney: false,        // £10,228,900 rather than £10.2M
+    pressConferences: true
   };
 
   let prefs = null;

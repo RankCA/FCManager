@@ -359,8 +359,14 @@
     const us = isHome ? res.homeGoals : res.awayGoals;
     const them = isHome ? res.awayGoals : res.homeGoals;
     const outcome = us > them ? 1 : (us === them ? 0 : -1);
-    const importance = fixture.comp.indexOf('euro:') === 0 ? 1.25
+    let importance = fixture.comp.indexOf('euro:') === 0 ? 1.25
       : (fixture.comp.indexOf('cup:') === 0 ? 0.8 : 1);
+    // Talking a game up in the press means the board is watching this one
+    // harder. Back it up and you gain more; lose and it costs more.
+    if (s.pressBravado) {
+      importance *= 1 + Math.min(0.6, s.pressBravado * 0.3);
+      s.pressBravado = Math.max(0, s.pressBravado - 1);
+    }
     FCM.D.judgeResult(s, outcome, importance);
 
     if (FCM.D.checkSacking(s)) {
@@ -1066,6 +1072,21 @@
           { type: 'transfer-request', player: p.id });
       }
     });
+
+    // Promises you made come due, and a mood in the senior players spreads.
+    FCM.MM.reviewPromises(meClub, s).forEach(r => {
+      if (r.outcome === 'kept') {
+        G.news('Promise kept: ' + r.player.name, r.text + ' He is happier for it.',
+          'contract');
+      } else {
+        G.news('You broke your word to ' + r.player.name,
+          r.text + (r.player.trustBroken >= 2
+            ? ' He has asked to leave and will not believe you again.'
+            : ' He will not take the next promise at face value.'), 'contract',
+          { type: 'promise-broken', player: r.player.id });
+      }
+    });
+    FCM.MM.spreadMood(meClub, rng);
 
     // Wages the user pays toward players loaned out elsewhere.
     FCM.DB.players.forEach(p => {

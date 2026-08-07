@@ -196,6 +196,24 @@ academy, staff, stadium, records and awards.
   versus a 1★ (+1.25 vs +0.50 overall per prospect per season). The physio
   shortens injuries, the scout finds better prospects abroad
 
+**Club vision**
+- The board sets a **multi-year brief** alongside the season's league target:
+  win a major trophy, establish us in Europe, build a young side, make us
+  self-sustaining, or make the academy produce
+- Each is measured against something real — trophies won, seasons in Europe,
+  average squad age, the balance, league appearances by graduates — and runs
+  over three or four years with a visible deadline
+- Deliver it and confidence jumps 25 points and the board opens the
+  chequebook. Miss it and no amount of decent league finishes covers for it
+
+**Fixture congestion**
+- A crowded calendar now costs you. Games in the last fortnight and the one
+  ahead combine into a pressure reading from *Comfortable* to *Brutal*
+- Under congestion matches drain up to 50% more fitness and injuries are up
+  to twice as likely, so **rotation is worth doing** rather than a nicety
+- Tired players are also worth slightly less than their rating suggests
+- The Home tab warns you when your XI is running on empty in a heavy run
+
 **Awards, records & objectives**
 - Player of the Month, and end-of-season Golden Boot, Playmaker, Golden Glove,
   Player of the Season and Young Player of the Season
@@ -320,6 +338,8 @@ generation you built.
 - Default match speed, automatic substitutions, auto-pick line-up, autosave
 - **Hide player potential** for a tougher, scout-driven game
 - **Show money in full** — `£10,228,900` everywhere instead of `£10.2M`
+- **Circular or classic brackets** — draw knockouts as a circle or as
+  left-to-right columns
 - Turn off competition colouring, switch to compact density
 
 **Player development plans**

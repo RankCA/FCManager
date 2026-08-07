@@ -21,7 +21,7 @@
    'js/core/util.js', 'js/core/names.js',
    'js/engine/player.js', 'js/engine/tactics.js', 'js/engine/match.js',
    'js/engine/youth.js', 'js/engine/finance.js', 'js/engine/morale.js',
-   'js/engine/difficulty.js', 'js/engine/training.js', 'js/engine/manmgmt.js', 'js/engine/scouting.js', 'js/engine/owners.js', 'js/engine/awards.js', 'js/engine/contracts.js', 'js/engine/managers.js',
+   'js/engine/difficulty.js', 'js/engine/training.js', 'js/engine/manmgmt.js', 'js/engine/scouting.js', 'js/engine/owners.js', 'js/engine/awards.js', 'js/engine/contracts.js', 'js/engine/managers.js', 'js/engine/congestion.js', 'js/engine/vision.js',
    'js/engine/nations.js',
    'js/engine/international.js',
    'js/data/db-clubs.js', 'js/data/db-nations.js', 'js/data/db-names.js',
@@ -818,6 +818,90 @@ assert(mgMoves.every(mv => mv.in && mv.in.name && mv.in !== mv.out),
 assert(Object.values(mgState.managers).every(m => m.games === 0),
   'records reset for the new season');
 FCM.G._usedNames = null;
+
+// --------------------------------------------- congestion and club vision
+h2('20. Fixture congestion');
+const CG = FCM.CG;
+const cgClub = DB.clubs.find(c => c.name === 'Arsenal');
+// Stand in a fixture list rather than simulating a season for it.
+const cgFixtures = [];
+FCM.G = FCM.G || {};
+FCM.G.allFixtures = function () { return cgFixtures; };
+function cgFix(day, played) {
+  cgFixtures.push({ home: cgClub.id, away: 999, day: day, played: played });
+}
+const cgState = { day: 100 };
+assert(CG.pressure(cgState, cgClub.id, 100) === 0, 'an empty calendar is no pressure');
+
+// Four games in the last fortnight is a hard run.
+[92, 95, 98, 100].forEach(d => cgFix(d, true));
+CG.invalidate();
+const busy = CG.pressure(cgState, cgClub.id, 100);
+const busyLoad = CG.load(cgState, cgClub.id, 100);
+log('  4 games in 14 days → ' + CG.label(busy).text + ' (' + busy.toFixed(2) + ')', 'dim');
+assert(busyLoad.recent === 4, 'recent games are counted', busyLoad.recent);
+assert(busy > 0.35, 'four games a fortnight reads as congested', busy.toFixed(2));
+
+// Fixtures still to come add to it.
+[103, 106, 109].forEach(d => cgFix(d, false));
+CG.invalidate();
+const worse = CG.pressure(cgState, cgClub.id, 100);
+assert(worse > busy, 'a packed fortnight ahead makes it worse',
+  busy.toFixed(2) + ' -> ' + worse.toFixed(2));
+assert(CG.load(cgState, cgClub.id, 100).upcoming === 3, 'upcoming games are counted');
+
+// The consequences have to be real, not cosmetic.
+assert(CG.fatigueMultiplier(worse) > 1.2, 'congestion drains more fitness',
+  CG.fatigueMultiplier(worse).toFixed(2) + '×');
+assert(CG.injuryMultiplier(worse) > 1.5, 'and makes injuries likelier',
+  CG.injuryMultiplier(worse).toFixed(2) + '×');
+const tiredPl = { fitness: 60 }, freshPl = { fitness: 100 };
+assert(CG.sharpness(tiredPl, worse) < CG.sharpness(freshPl, worse),
+  'a tired player is worth less under congestion',
+  CG.sharpness(tiredPl, worse).toFixed(3) + ' v ' + CG.sharpness(freshPl, worse).toFixed(3));
+assert(CG.sharpness(tiredPl, 0) === 1, 'and nothing is lost in a free week');
+
+// Fixtures far outside the window must not count.
+cgFixtures.length = 0;
+[40, 50, 60].forEach(d => cgFix(d, true));
+CG.invalidate();
+assert(CG.load(cgState, cgClub.id, 100).recent === 0,
+  'games outside the window are ignored');
+delete FCM.G.allFixtures;
+
+h2('21. Club vision');
+const VS = FCM.VS;
+const vsClub = DB.clubs.find(c => c.name === 'Everton');
+const vsState = { season: 2025, userClubId: vsClub.id, competitions: {},
+  career: { trophies: [] }, board: { confidence: 70 } };
+const vision = VS.create(vsState, vsClub, new FCM.RNG(6));
+vsState.vision = vision;
+assert(!!VS.GOALS[vision.goal], 'a vision is chosen', vision.goal);
+assert(vision.years >= 3, 'it runs over years, not a season', vision.years + ' years');
+assert(vision.endSeason === vision.startSeason + vision.years - 1,
+  'the deadline matches the term');
+assert(vision.target !== null && vision.target !== undefined,
+  'and it has something measurable to hit', String(vision.target));
+log('  ' + vsClub.name + ': ' + VS.GOALS[vision.goal].label +
+  ' over ' + vision.years + ' years', 'dim');
+
+// Progress must move, and the deadline must bite.
+assert(VS.progress(vsState) < 1, 'it does not start complete');
+assert(VS.yearsLeft(vsState) === vision.years, 'full term remaining at the start');
+vsState.season = vision.endSeason;
+assert(VS.yearsLeft(vsState) === 1, 'the final year reads as one left');
+const verdict = VS.closeSeason(vsState, vsClub);
+assert(verdict === 'failed' || verdict === 'met',
+  'the vision resolves when its term is up', String(verdict));
+
+// A silverware vision has to notice trophies.
+const sv = { season: 2025, userClubId: vsClub.id, competitions: {},
+  career: { trophies: [] }, board: { confidence: 70 },
+  vision: { goal: 'silverware', startSeason: 2025, endSeason: 2028, years: 4, target: 1 } };
+assert(VS.progress(sv) === 0, 'no trophies, no progress');
+sv.career.trophies.push({ comp: 'FA Cup', season: 2026 });
+assert(VS.progress(sv) === 1, 'winning one completes it');
+assert(VS.closeSeason(sv, vsClub) === 'met', 'and the board signs it off');
 
 h2(fails === 0 ? 'ALL TESTS PASSED' : fails + ' TEST(S) FAILED');
 document.title = fails === 0 ? 'PASS' : 'FAIL(' + fails + ')';

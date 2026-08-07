@@ -184,6 +184,27 @@
     const qCard = SC.qualifyingCard();
     if (qCard) left.appendChild(qCard);
 
+    // --- Fixture congestion ---
+    const press = FCM.CG.pressure(s, club.id, s.day);
+    const load = FCM.CG.load(s, club.id, s.day);
+    if (press > 0.12 || load.upcoming >= 3) {
+      const lab = FCM.CG.label(press);
+      const cbox = el('div');
+      const top = el('div', { class: 'row-between', style: 'margin-bottom:8px' });
+      top.appendChild(el('span', { class: 'small',
+        text: load.recent + ' played and ' + load.upcoming + ' to come in a fortnight' }));
+      top.appendChild(el('span', { class: 'pill ' + lab.cls, text: lab.text }));
+      cbox.appendChild(top);
+      cbox.appendChild(UI.bar(press * 100, 100,
+        press > 0.7 ? 'bad' : (press > 0.45 ? 'warn' : '')));
+      const advice = FCM.CG.rotationAdvice(s, club, s.tactics[club.id] || {});
+      if (advice) {
+        cbox.appendChild(el('div', { class: 'concern bad', style: 'margin-top:9px',
+          text: '⚠ ' + advice.text }));
+      }
+      left.appendChild(UI.card('Fixture Congestion', cbox));
+    }
+
     // --- Contracts running down ---
     const expiring = FCM.CN.expiringSquad(club, s);
     if (expiring.length) {
@@ -293,6 +314,25 @@
       }
     }
     right.appendChild(UI.card('The Board', boardBody));
+
+    // --- The long-term brief ---
+    if (s.vision && !s.vision.done && !s.vision.failed) {
+      const goal = FCM.VS.goalOf(s);
+      const prog = FCM.VS.progress(s);
+      const left2 = FCM.VS.yearsLeft(s);
+      const vb = el('div');
+      vb.appendChild(el('div', { style: 'font-weight:650;font-size:13.5px',
+        text: goal.label }));
+      vb.appendChild(el('div', { class: 'tiny mute2', style: 'margin:2px 0 9px',
+        text: goal.blurb }));
+      vb.appendChild(UI.bar(prog * 100, 100, prog >= 0.66 ? '' : (left2 <= 1 ? 'bad' : 'warn')));
+      const row = el('div', { class: 'row-between small', style: 'margin-top:7px' });
+      row.appendChild(el('span', { class: 'mute2', text: goal.detail(s) }));
+      row.appendChild(el('span', { class: 'pill ' + (left2 <= 1 ? 'pill-bad' : 'pill-pos'),
+        text: left2 === 1 ? 'Final year' : left2 + ' years left' }));
+      vb.appendChild(row);
+      right.appendChild(UI.card('Club Vision', vb));
+    }
 
     // --- Squad snapshot ---
     const squad = mySquad();
@@ -531,12 +571,15 @@
       }
     } else {
       // Knockout bracket, round by round.
-      body.appendChild(SC.radialBracket(t.knockout.rounds, {
-        badge: n => UI.nationBadge(n, 'sm'),
-        label: n => n,
-        isMine: n => n === mine
-      }));
-      const br = el('div', { class: 'ko-bracket', style: 'display:none' });
+      const radial = FCM.ST.get('radialBrackets') !== false;
+      if (radial) {
+        body.appendChild(SC.radialBracket(t.knockout.rounds, {
+          badge: n => UI.nationBadge(n, 'sm'),
+          label: n => n,
+          isMine: n => n === mine
+        }));
+      }
+      const br = el('div', { class: 'ko-bracket', style: radial ? 'display:none' : '' });
       t.knockout.rounds.forEach(round => {
         const col = el('div', { class: 'ko-round' });
         col.appendChild(el('div', { class: 'ko-round-name', text: round.name }));
@@ -2936,12 +2979,15 @@
     {
       const body = el('div');
       if (comp.type === 'cup') {
-        body.appendChild(SC.radialBracket(comp.rounds, {
-          badge: id => UI.badge(FCM.DB.clubById[id], 'sm'),
-          label: id => (FCM.DB.clubById[id] || {}).name || '',
-          isMine: id => !!club && id === club.id
-        }));
-        const br = el('div', { class: 'bracket', style: 'display:none' });
+        const radial = FCM.ST.get('radialBrackets') !== false;
+        if (radial) {
+          body.appendChild(SC.radialBracket(comp.rounds, {
+            badge: id => UI.badge(FCM.DB.clubById[id], 'sm'),
+            label: id => (FCM.DB.clubById[id] || {}).name || '',
+            isMine: id => !!club && id === club.id
+          }));
+        }
+        const br = el('div', { class: 'bracket', style: radial ? 'display:none' : '' });
         comp.rounds.forEach((round, ri) => {
           const col = el('div', { class: 'br-round' });
           const left = round.ties.length * 2 + round.byes.length;
@@ -2974,12 +3020,15 @@
       } else if (comp.type === 'continental') {
         // Once the league phase is done the bracket is the story.
         if (comp.phase !== 'league' && (comp.rounds || []).length) {
-          body.appendChild(SC.radialBracket(comp.rounds, {
-            badge: id => UI.badge(FCM.DB.clubById[id], 'sm'),
-            label: id => (FCM.DB.clubById[id] || {}).name || '',
-            isMine: id => !!club && id === club.id
-          }));
-          const br = el('div', { class: 'bracket', style: 'display:none' });
+          const radial = FCM.ST.get('radialBrackets') !== false;
+          if (radial) {
+            body.appendChild(SC.radialBracket(comp.rounds, {
+              badge: id => UI.badge(FCM.DB.clubById[id], 'sm'),
+              label: id => (FCM.DB.clubById[id] || {}).name || '',
+              isMine: id => !!club && id === club.id
+            }));
+          }
+          const br = el('div', { class: 'bracket', style: radial ? 'display:none' : '' });
           comp.rounds.forEach(round => {
             const col = el('div', { class: 'br-round' });
             col.appendChild(el('div', { class: 'br-title',
@@ -4245,6 +4294,9 @@
       '£10,228,900 instead of £10.2M.', function () { FCM.App.render(); });
     toggleRow(gameBox, 'pressConferences', 'Press conferences',
       'Face the media before matches. Turn off to skip them entirely.');
+    toggleRow(gameBox, 'radialBrackets', 'Circular knockout brackets',
+      'Draw knockouts as a circle. Turn off for classic left-to-right columns.',
+      function () { FCM.App.render(); });
     toggleRow(gameBox, 'confirmBigDecisions', 'Confirm big decisions',
       'Ask before releasing players and other one-way actions.');
     toggleRow(gameBox, 'autosave', 'Autosave',

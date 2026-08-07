@@ -28,7 +28,8 @@
     density: 'comfortable',  // comfortable | compact
     showCompColours: true,
     fullMoney: false,        // £10,228,900 rather than £10.2M
-    pressConferences: true
+    pressConferences: true,
+    radialBrackets: true    // circular knockout draws vs classic columns
   };
 
   let prefs = null;

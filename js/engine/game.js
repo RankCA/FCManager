@@ -78,6 +78,7 @@
       hallOfFame: [],
       seekingJob: false,
       nationalOnly: !!opts.nationalOnly,
+      vision: null,
       objectives: [],
       awards: [],
       monthDay: 0,
@@ -143,6 +144,8 @@
     G.setBoardExpectation();
     s.objectives = FCM.AW.generateObjectives(s, FCM.DB.clubById[s.userClubId],
       FCM.DB.leagueOf(FCM.DB.clubById[s.userClubId]));
+    // The long-term brief, on top of this season's league target.
+    s.vision = FCM.VS.create(s, FCM.DB.clubById[s.userClubId], rng);
     G.news('Welcome to ' + FCM.DB.clubById[s.userClubId].name,
       'The board has appointed you as manager. ' + G.state.board.expectation +
       ' (' + level.label + ' difficulty)', 'board');
@@ -308,6 +311,7 @@
   };
 
   G.reindexFixtures = function () {
+    if (FCM.CG) FCM.CG.invalidate();
     const s = G.state;
     s.fixturesByDay = {};
     G.allFixtures().forEach(f => {
@@ -663,6 +667,9 @@
           const p = FCM.DB.byId[r.id];
           if (!p) return;
           p.apps++; p.careerApps++;
+          // Academy graduates earning first-team minutes count toward the
+          // board's academy vision.
+          if (club.id === s.userClubId) FCM.VS.recordGraduateApp(s, p);
           p.minutes += r.mins;
           p.goals += r.goals; p.careerGoals += r.goals;
           p.assists += r.assists;
@@ -685,8 +692,12 @@
           P.applyMatchRating(p, r.rating);
           FCM.AW.recordMonthly(p, r.rating, r.goals, r.assists);
           p.lastMatchDay = s.day;
-          p.fitness = U.clamp(p.fitness - r.mins * 0.28, 8, 100);
-          const inj = P.rollInjury(p, G.rng, 1);
+          // A crowded calendar takes more out of the legs, and tired legs
+          // get hurt - this is what makes rotation worth doing.
+          const press = FCM.CG.pressure(s, club.id, s.day);
+          p.fitness = U.clamp(
+            p.fitness - r.mins * 0.28 * FCM.CG.fatigueMultiplier(press), 8, 100);
+          const inj = P.rollInjury(p, G.rng, FCM.CG.injuryMultiplier(press));
           if (inj && club.id === s.userClubId) {
             G.news(p.name + ' injured', p.name + ' picked up a ' + inj.name.toLowerCase() +
               ' and will be out for around ' + inj.days + ' days.', 'injury', { player: p.id });
@@ -1816,6 +1827,28 @@
     }
 
     if (hasClub) G.awardSeasonHonours(uClub, uLeague);
+
+    // The board's long-term brief comes due.
+    if (hasClub && s.vision) {
+      const outcome = FCM.VS.closeSeason(s, uClub);
+      const goal = FCM.VS.goalOf(s);
+      if (outcome === 'met') {
+        s.board.confidence = U.clamp(s.board.confidence + 25, 0, 100);
+        uClub.transferBudget += Math.round(uClub.revenue * 0.15);
+        G.news('Vision delivered: ' + goal.label,
+          'You have done what the board asked of you over ' + s.vision.years +
+          ' years. Your standing here is as strong as it gets, and there is ' +
+          'extra money to build on it.', 'trophy');
+        s.vision = FCM.VS.create(s, uClub, G.rng);
+      } else if (outcome === 'failed') {
+        s.board.confidence = U.clamp(s.board.confidence - 28, 0, 100);
+        G.news('Vision missed: ' + goal.label,
+          'The board set this out ' + s.vision.years + ' years ago and it has ' +
+          'not happened. Whatever the league table says, they expected more.',
+          'board');
+        s.vision = FCM.VS.create(s, uClub, G.rng);
+      }
+    }
     FCM.CR.closeSeason(s);
     G.runInternationalSummer();
 

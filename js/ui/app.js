@@ -14,10 +14,10 @@
     { id: 'tactics', label: 'Tactics', render: () => SC.tactics() },
     { id: 'calendar', label: 'Schedule', render: () => SC.schedule() },
     { id: 'comps', label: 'Competitions', render: () => SC.competitionsHub() },
-    { id: 'transfers', label: 'Transfers', render: () => SC.transfers() },
-    { id: 'club', label: 'Club', render: () => SC.club() },
+    { visible: () => !FCM.G.isNationalOnly(), id: 'transfers', label: 'Transfers', render: () => SC.transfers() },
+    { visible: () => !FCM.G.isNationalOnly(), id: 'club', label: 'Club', render: () => SC.club() },
     { id: 'career', label: 'Career', render: () => SC.career() },
-    { id: 'finances', label: 'Finances', render: () => SC.finances() },
+    { visible: () => !FCM.G.isNationalOnly(), id: 'finances', label: 'Finances', render: () => SC.finances() },
     { id: 'sandbox', label: '⚡', render: () => SC.sandbox(),
       visible: () => FCM.D.isGod() },
     { id: 'settings', label: '⚙', render: () => SC.settings() }
@@ -116,6 +116,29 @@
     leagueSel.addEventListener('change', fillClubs);
     clubSel.addEventListener('change', showPreview);
     fillLeagues();
+
+    // ---- National-team-only career ----
+    const natChk = document.getElementById('chk-national');
+    const natFld = document.getElementById('fld-nation');
+    const natSel = document.getElementById('sel-nation');
+    if (natChk && natSel) {
+      // Strongest first: nobody's first save is Turks and Caicos.
+      FCM.NT.ranked().forEach(n => natSel.appendChild(
+        U.el('option', { value: n.name, text: n.name })));
+      natSel.value = 'England';
+      function syncNational() {
+        const on = natChk.checked;
+        natFld.classList.toggle('hidden', !on);
+        // The club pickers are meaningless without a club.
+        [countrySel, leagueSel, clubSel].forEach(x => {
+          x.disabled = on;
+          if (x.parentElement) x.parentElement.classList.toggle('dim-fld', on);
+        });
+        preview.classList.toggle('hidden', on);
+      }
+      natChk.addEventListener('change', syncNational);
+      syncNational();
+    }
 
     // ---- Difficulty ----
     const diffBox = document.getElementById('diff-picker');
@@ -217,8 +240,11 @@
     document.getElementById('btn-start').addEventListener('click', function () {
       const clubId = Number(clubSel.value);
       const manager = nameIn.value.trim() || 'The Gaffer';
+      const nationalOnly = natChk && natChk.checked;
       G.newGame({ clubId: clubId, managerName: manager, startYear: 2025,
-        difficulty: App.difficulty });
+        difficulty: App.difficulty,
+        nationalOnly: nationalOnly,
+        nation: nationalOnly ? natSel.value : null });
       startApp();
     });
   }
@@ -279,18 +305,23 @@
   App.render = function () {
     const s = G.state;
     const club = FCM.DB.clubById[s.userClubId];
-    const league = FCM.DB.leagueOf(club);
+    const league = club ? FCM.DB.leagueOf(club) : null;
+    // A national-team-only manager has no club, so the header carries the
+    // nation instead.
+    const nation = !club ? (s.career && s.career.nation) : null;
 
     const badgeBox = document.getElementById('tb-badge');
     badgeBox.innerHTML = '';
     badgeBox.replaceWith((function () {
-      const b = UI.badge(club, 'sm');
+      const b = club ? UI.badge(club, 'sm') : UI.nationBadge(nation, 'sm');
       b.id = 'tb-badge';
       return b;
     })());
 
-    document.getElementById('tb-clubname').textContent = club.name;
-    document.getElementById('tb-league').textContent = league ? league.name : '';
+    document.getElementById('tb-clubname').textContent = club ? club.name : (nation || '—');
+    document.getElementById('tb-league').textContent = club
+      ? (league ? league.name : '')
+      : 'National team';
     document.getElementById('tb-day').textContent = U.fmtDate(s.season, s.day);
     document.getElementById('tb-season').textContent =
       'Season ' + s.season + '/' + String(s.season + 1).slice(2);

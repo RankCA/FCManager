@@ -236,9 +236,10 @@
     return DB.clubs.filter(c => c.league === leagueId);
   };
   DB.squadOf = function (club) {
+    if (!club) return [];
     return club.squad.map(id => DB.byId[id]).filter(Boolean);
   };
-  DB.leagueOf = function (club) { return DB.leagueById[club.league]; };
+  DB.leagueOf = function (club) { return club ? DB.leagueById[club.league] : null; };
 
   FCM.DB = DB;
 })(window.FCM = window.FCM || {});

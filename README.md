@@ -205,11 +205,21 @@ academy, staff, stadium, records and awards.
   runs, trophy cabinet, squad leaders
 - **Season objectives** from the board, each with a confidence and cash
   reward, tracked live
+- **Knockouts are drawn as a circle** — the first round on the outer ring,
+  each winner pulled inward, the champion at the centre. Used for domestic
+  cups, Europe and every international tournament
 - **Derbies** carry extra weight — 30 real rivalries from the Manchester
   derby to the Old Firm, *plus any you earn*. Repeated cup knockouts and
   heavy defeats build heat between two clubs, and past a threshold the
   fixture becomes a derby in its own right, announced when it happens.
   Grudges cool if you stop meeting
+
+**Manage a country instead of a club**
+- Tick *"Manage a national team only"* at the start and you have no club at
+  all: no squad to buy for, no wage bill, no board. The association is your
+  employer, judged on qualifying and on how far you go once you are there
+- Club tabs disappear entirely. Squad and Tactics show your call-up all year
+  round rather than only during a tournament
 
 **The rest of the managerial world**
 - All 399 other clubs have a **named manager** with a nationality, a

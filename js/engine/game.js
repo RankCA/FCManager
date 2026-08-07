@@ -29,6 +29,12 @@
   };
 
   // ---- New game ----------------------------------------------------
+  /** Managing a country and nothing else. */
+  G.isNationalOnly = function () {
+    const s = G.state;
+    return !!(s && s.nationalOnly);
+  };
+
   G.newGame = function (opts) {
     const seed = opts.seed || Math.floor(Math.random() * 1e9);
     const rng = new FCM.RNG(seed);
@@ -71,6 +77,7 @@
       qualifying: [],
       hallOfFame: [],
       seekingJob: false,
+      nationalOnly: !!opts.nationalOnly,
       objectives: [],
       awards: [],
       monthDay: 0,
@@ -107,8 +114,23 @@
     // Give every other club a manager, so the job market is a world.
     FCM.MG.populate(s, rng, G._usedNames);
 
-    // Difficulty shapes the budget you inherit.
     const level = FCM.D.get(s.difficulty);
+    if (s.nationalOnly) {
+      // No club, no budget, no board - the association is your employer.
+      s.userClubId = 0;
+      FCM.CR.takeNationJob(s, opts.nation);
+      FCM.MG.populate(s, rng, G._usedNames);
+      G.setupSeason(true);
+      G.startQualifying();
+      s.board.expectation = 'The ' + opts.nation + ' association expect you to ' +
+        'qualify for major tournaments and compete once you are there.';
+      s.board.targetPos = 1;
+      G.news('You are the ' + opts.nation + ' manager',
+        'You have no club to run. Your job is the national side: qualifying ' +
+        'campaigns through the season, and the tournament in the summer.', 'board');
+      return s;
+    }
+    // Difficulty shapes the budget you inherit.
     FCM.D.applyBudgets(FCM.DB.clubById[s.userClubId], level);
     s.ticketPrice = Math.round(14 + FCM.DB.clubById[s.userClubId].rep * 0.42);
 
@@ -198,6 +220,7 @@
    * League fixtures are fixed and take priority.
    */
   G.resolveClashes = function () {
+    const today = G.state ? G.state.day : 0;
     const busy = {};
     function mark(day, f) {
       const set = busy[day] = busy[day] || {};
@@ -217,9 +240,18 @@
         let found = null;
         for (let off = 1; off <= 12 && found === null; off++) {
           if (f.day + off <= C.SEASON_END + 20 && free(f.day + off, f)) found = f.day + off;
-          else if (f.day - off > C.SEASON_START - 10 && free(f.day - off, f)) found = f.day - off;
+          // Moving it earlier is only an option if that day is still ahead
+          // of us. A fixture parked in the past is never played at all.
+          else if (f.day - off > today && f.day - off > C.SEASON_START - 10 &&
+                   free(f.day - off, f)) found = f.day - off;
         }
         if (found !== null) f.day = found;
+      }
+      // Anything already stranded behind us gets the next free day instead.
+      if (f.day <= today) {
+        let d = today + 1;
+        while (d <= C.SEASON_END + 20 && !free(d, f)) d++;
+        f.day = d;
       }
       mark(f.day, f);
     });
@@ -290,7 +322,6 @@
       const c = G.state.competitions[id];
       if (c.fixtures) out.push.apply(out, c.fixtures);
       if (c.leaguePhase) out.push.apply(out, c.leaguePhase.fixtures);
-      if (c.type === 'continental' && c.fixtures) out.push.apply(out, c.fixtures);
       if (c.knockout) out.push.apply(out, c.knockout.fixtures);
     }
     return out;
@@ -300,6 +331,14 @@
   G.setBoardExpectation = function () {
     const s = G.state;
     const club = FCM.DB.clubById[s.userClubId];
+    // A national-team manager answers to an association, not a club board.
+    if (!club) {
+      const nat = (s.career && s.career.nation) || 'your nation';
+      s.board.expectation = 'The ' + nat + ' association expect you to qualify ' +
+        'for major tournaments and compete once you are there.';
+      s.board.targetPos = 1;
+      return;
+    }
     const league = FCM.DB.leagueOf(club);
     const level = FCM.D.get(s.difficulty);
     const peers = U.sortBy(FCM.DB.clubsInLeague(club.league), c => c.rep, true);
@@ -939,6 +978,7 @@
    * rather than losing half a season of development.
    */
   G.reviewLoans = function () {
+    if (G.isNationalOnly()) return;
     const s = G.state;
     G.loanedOut().forEach(p => {
       const prog = TR.loanProgress(p, s.day);
@@ -968,6 +1008,7 @@
 
   /** Send expired loanees home. */
   G.resolveLoans = function () {
+    if (G.isNationalOnly()) return;
     const s = G.state;
     FCM.DB.players.forEach(p => {
       if (!p.loanedTo || !p.loanUntil) return;
@@ -993,6 +1034,7 @@
    * season rollover, when the day counter resets.
    */
   G.resolveStadium = function () {
+    if (G.isNationalOnly()) return;
     const s = G.state;
     if (!s.stadiumProject) return;
     if (s.day % 7 !== 0) return;
@@ -1006,6 +1048,7 @@
 
   /** Bring home any scouting mission that has finished. */
   G.resolveScouting = function () {
+    if (G.isNationalOnly()) return;
     const s = G.state, rng = G.rng;
     if (!s.scouting) s.scouting = { missions: [], found: [] };
     const club = FCM.DB.clubById[s.userClubId];
@@ -1203,7 +1246,9 @@
     });
 
     // Dressing-room mood for the user's squad, and any transfer requests.
+    // Everything from here is club work; a national-team manager has none.
     const meClub = FCM.DB.clubById[s.userClubId];
+    if (!meClub) return;
     FCM.DB.squadOf(meClub).forEach(p => {
       FCM.MO.tick(p, meClub, s, rng);
       const reason = FCM.MO.maybeRequestTransfer(p, meClub, s, rng);
@@ -1754,10 +1799,12 @@
     // are wiped, or every player looks like they played no games.
     const uClub = FCM.DB.clubById[s.userClubId];
     const uLeague = FCM.DB.leagueOf(uClub);
+    // A national-team-only manager has no league to be judged on.
+    const hasClub = !!uClub;
 
     // Winning the league is a trophy too. Cups were recorded but league
     // titles never were, so champions ended up with an empty cabinet.
-    if (uLeague && s.lastTables[uLeague.id] &&
+    if (hasClub && uLeague && s.lastTables[uLeague.id] &&
         s.lastTables[uLeague.id][0] === s.userClubId) {
       s.trophyCount = (s.trophyCount || 0) + 1;
       s.history.push({ season: s.season, comp: uLeague.name,
@@ -1768,7 +1815,7 @@
         uClub.name + ' are champions. A season that will be remembered.', 'trophy');
     }
 
-    G.awardSeasonHonours(uClub, uLeague);
+    if (hasClub) G.awardSeasonHonours(uClub, uLeague);
     FCM.CR.closeSeason(s);
     G.runInternationalSummer();
 
@@ -1806,12 +1853,12 @@
     (s.objectives || []).forEach(o => {
       if (o.done) return;
       if (o.kind === 'position') {
-        const table = s.lastTables[uClub.league];
+        const table = hasClub ? s.lastTables[uClub.league] : null;
         const pos = table ? table.indexOf(s.userClubId) + 1 : 99;
         if (pos > 0 && pos <= o.value) {
           o.done = true;
           s.board.confidence = U.clamp(s.board.confidence + o.reward, 0, 100);
-          uClub.transferBudget += o.cash || 0;
+          if (hasClub) uClub.transferBudget += o.cash || 0;
           G.news('Objective met: ' + o.label,
             'The board have released ' + U.money(o.cash || 0) + ' in extra funds.', 'board');
         } else { o.failed = true; }
@@ -1825,7 +1872,7 @@
     });
 
     // Judge the season against the board's target before rolling over.
-    const finalTable = s.lastTables[FCM.DB.clubById[s.userClubId].league];
+    const finalTable = hasClub ? s.lastTables[uClub.league] : null;
     if (finalTable) {
       const pos = finalTable.indexOf(s.userClubId) + 1;
       if (pos > 0) {
@@ -1871,8 +1918,12 @@
     }
     FCM.AW.resetRivals();
     FCM.AW.resetMonthly();
-    s.objectives = FCM.AW.generateObjectives(s, FCM.DB.clubById[s.userClubId],
-      FCM.DB.leagueOf(FCM.DB.clubById[s.userClubId]));
+    if (FCM.DB.clubById[s.userClubId]) {
+      s.objectives = FCM.AW.generateObjectives(s, FCM.DB.clubById[s.userClubId],
+        FCM.DB.leagueOf(FCM.DB.clubById[s.userClubId]));
+    } else {
+      s.objectives = [];
+    }
     G.news('Season ' + s.season + '/' + String(s.season + 1).slice(2) + ' begins',
       'Pre-season is underway. ' + s.board.expectation, 'board');
     if (result) result.newSeason = true;

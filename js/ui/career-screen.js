@@ -33,7 +33,8 @@
       const hero = el('div', { class: 'career-hero' });
       hero.appendChild(el('div', { class: 'career-name', text: s.managerName }));
       hero.appendChild(el('div', { class: 'career-sub',
-        text: myClub().name + (cr.nation ? '  ·  ' + cr.nation + ' national team' : '') }));
+        text: (myClub() ? myClub().name : (cr.nation || 'Between jobs')) +
+          (cr.nation && myClub() ? '  ·  ' + cr.nation + ' national team' : '') }));
       const medals = el('div', { class: 'career-medals' });
       medals.appendChild(el('div', { class: 'medal' }, [
         el('b', { text: cr.trophies.length }), el('span', { text: 'Trophies' })]));
@@ -110,7 +111,7 @@
         text: 'Leaving frees you to take another job. Retiring ends the career for ' +
           'good and enshrines it in your permanent legacy.' }));
       const btnRow = el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap' });
-      btnRow.appendChild(el('button', { class: 'btn', text: '🚪 Step down',
+      if (myClub()) btnRow.appendChild(el('button', { class: 'btn', text: '🚪 Step down',
         onclick: function () {
           UI.confirm('Leave ' + myClub().name + '?',
             'You will be out of work until you accept another job. Your record, ' +

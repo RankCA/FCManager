@@ -171,7 +171,8 @@
   TN.level = function (state, club, roleId) {
     const s = state.staff && state.staff[roleId];
     if (s && s.hired) return s.rating;
-    if (club[roleId] !== undefined) return club[roleId];
+    // A national-team-only manager has no club to fall back on.
+    if (club && club[roleId] !== undefined) return club[roleId];
     return 3;
   };
 

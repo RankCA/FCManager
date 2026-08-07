@@ -15,7 +15,91 @@
   // =====================================================================
   // Dashboard
   // =====================================================================
+  /** Home for a manager with no club: the nation, and nothing else. */
+  SC.nationalDashboard = function () {
+    const s = S(), cr = FCM.CR.ensure(s);
+    const wrap = el('div', { class: 'grid g-side' });
+    const left = el('div', { class: 'stack' });
+    const right = el('div', { class: 'stack' });
+
+    const next = G().nextUserFixture();
+    const nm = el('div');
+    if (next) {
+      const row = el('div', { class: 'next-match' });
+      [[next.homeName, 'Home'], [next.awayName, 'Away']].forEach((pair, i) => {
+        if (i === 1) row.appendChild(el('div', { class: 'nm-vs', text: 'v' }));
+        const side = el('div', { class: 'nm-side' });
+        side.appendChild(UI.nationBadge(pair[0], 'lg'));
+        side.appendChild(el('div', { text: pair[0], style: 'font-weight:600;font-size:13px' }));
+        side.appendChild(el('div', { class: 'tiny muted', text: pair[1] }));
+        row.appendChild(side);
+      });
+      nm.appendChild(row);
+      const meta = el('div', { class: 'nm-meta' });
+      meta.appendChild(FCM.CT.pill(next.comp, next.compName + ' · ' + next.round));
+      meta.appendChild(el('div', { class: 'small', text: date(next.day, 'long') }));
+      nm.appendChild(meta);
+    } else {
+      nm.appendChild(el('div', { class: 'empty', text: 'No international fixtures scheduled.' }));
+    }
+    left.appendChild(UI.card('Next Match', nm));
+
+    const qCard = SC.qualifyingCard();
+    if (qCard) left.appendChild(qCard);
+    G().liveTournaments().forEach(t => left.appendChild(SC.tournamentCard(t)));
+
+    // Inbox.
+    const inbox = el('div');
+    const items = s.inbox.slice(0, 14);
+    if (!items.length) inbox.appendChild(el('div', { class: 'empty', text: 'No news.' }));
+    items.forEach(item => {
+      const row = el('div', { class: 'inbox-item ' + (item.read ? '' : 'unread') });
+      row.appendChild(el('div', { class: 'ii-icon', text: SC.newsIcon(item.kind) }));
+      const mid = el('div', { style: 'flex:1;min-width:0' });
+      mid.appendChild(el('div', { class: 'ii-title', text: item.title }));
+      mid.appendChild(el('div', { class: 'ii-body', text: item.body }));
+      row.appendChild(mid);
+      row.appendChild(el('div', { class: 'ii-day', text: date(item.day, 'short') }));
+      row.addEventListener('click', () => SC.openNews(item));
+      inbox.appendChild(row);
+    });
+    const ic = UI.card('Inbox', inbox);
+    ic.querySelector('.card-body').style.padding = '0';
+    left.appendChild(ic);
+
+    // The nation itself.
+    const natBox = el('div');
+    const head = el('div', { class: 'row', style: 'gap:11px;margin-bottom:10px' });
+    head.appendChild(UI.nationBadge(cr.nation, 'lg'));
+    const ht = el('div');
+    ht.appendChild(el('div', { text: cr.nation, style: 'font-weight:700;font-size:16px' }));
+    ht.appendChild(el('div', { class: 'tiny mute2',
+      text: (FCM.IN.CONFEDS[(FCM.NT.get(cr.nation) || {}).confed] || {}).label || '' }));
+    head.appendChild(ht);
+    natBox.appendChild(head);
+    const kv = el('div', { class: 'kv' });
+    const rank = FCM.NT.ranked().findIndex(n => n.name === cr.nation) + 1;
+    [['World ranking', rank ? '#' + rank : '—'],
+     ['Squad rating', Math.round(FCM.IN.nationStrength(cr.nation))],
+     ['Players eligible', FCM.DB.players.filter(p => p.nat === cr.nation && !p.isYouth).length]
+    ].forEach(([k, v]) => {
+      kv.appendChild(el('div', { class: 'k', text: k }));
+      kv.appendChild(el('div', { class: 'v', text: v }));
+    });
+    natBox.appendChild(kv);
+    right.appendChild(UI.card('Your Nation', natBox));
+
+    const boardBody = el('div');
+    boardBody.appendChild(el('p', { text: s.board.expectation,
+      style: 'margin:0;font-size:13px' }));
+    right.appendChild(UI.card('The Association', boardBody));
+
+    wrap.appendChild(left); wrap.appendChild(right);
+    return wrap;
+  };
+
   SC.dashboard = function () {
+    if (FCM.G.isNationalOnly()) return SC.nationalDashboard();
     const s = S(), club = myClub();
     const wrap = el('div', { class: 'grid g-side' });
     const left = el('div', { class: 'stack' });
@@ -447,7 +531,12 @@
       }
     } else {
       // Knockout bracket, round by round.
-      const br = el('div', { class: 'ko-bracket' });
+      body.appendChild(SC.radialBracket(t.knockout.rounds, {
+        badge: n => UI.nationBadge(n, 'sm'),
+        label: n => n,
+        isMine: n => n === mine
+      }));
+      const br = el('div', { class: 'ko-bracket', style: 'display:none' });
       t.knockout.rounds.forEach(round => {
         const col = el('div', { class: 'ko-round' });
         col.appendChild(el('div', { class: 'ko-round-name', text: round.name }));
@@ -885,6 +974,8 @@
     const s = S();
     const cr = FCM.CR.ensure(s);
     if (!cr.nation) return null;
+    // A national-team-only career has no club to switch to.
+    if (FCM.G.isNationalOnly()) { FCM.App.teamView = 'nation'; return null; }
     if (!G().liveTournaments().some(t => !t.complete)) return null;
     if (!FCM.App.teamView) FCM.App.teamView = 'club';
     const seg = el('div', { class: 'seg', style: 'margin-bottom:12px' });
@@ -903,7 +994,10 @@
   /** The nation currently being viewed, if any. */
   SC.viewingNation = function () {
     const cr = FCM.CR.ensure(S());
-    if (!cr.nation || FCM.App.teamView !== 'nation') return null;
+    if (!cr.nation) return null;
+    // Without a club the national side is the only side, all year round.
+    if (FCM.G.isNationalOnly()) return cr.nation;
+    if (FCM.App.teamView !== 'nation') return null;
     return G().liveTournaments().some(t => !t.complete) ? cr.nation : null;
   };
 
@@ -1342,6 +1436,7 @@
       return { squad: squad, tac: s.tactics[key], name: nation, isNation: true };
     }
     const club = myClub();
+    if (!club) return { squad: [], tac: T.defaultTactics(), name: '—', isNation: false };
     return { squad: mySquad(), tac: s.tactics[club.id], name: club.name, isNation: false };
   };
 
@@ -1849,14 +1944,14 @@
   SC.competitionList = function () {
     const s = S(), club = myClub();
     const out = [];
-    const myLeague = FCM.DB.leagueById[club.league];
+    const myLeague = club ? FCM.DB.leagueById[club.league] : null;
     if (myLeague && s.competitions['league:' + myLeague.id]) {
       out.push({ key: 'league:' + myLeague.id, label: myLeague.name,
         group: 'Yours', comp: null, league: myLeague });
     }
     const cups = Object.values(s.competitions).filter(c => c.type !== 'league');
     cups.forEach(c => {
-      const mine = (c.entrants || []).indexOf(club.id) >= 0;
+      const mine = !!club && (c.entrants || []).indexOf(club.id) >= 0;
       out.push({ key: c.id, label: c.name, group: mine ? 'Yours' : 'Elsewhere', comp: c });
     });
     FCM.DB.leagues.forEach(l => {
@@ -2728,13 +2823,125 @@
   // =====================================================================
   // Competitions (cups + Europe)
   // =====================================================================
+  /**
+   * A knockout drawn as a circle: the first round on the outer ring, each
+   * winner pulled inward toward the champion at the centre. Rounds are
+   * generated from the tie tree, so it works for a 64-team World Cup and a
+   * four-team play-off alike.
+   *
+   * `rounds` is [{ ties: [{home, away, hg, ag, winner, pens}] }, ...].
+   * `opts.badge(id)` returns an element; `opts.label(id)` a name.
+   */
+  SC.radialBracket = function (rounds, opts) {
+    const o = opts || {};
+    const live = (rounds || []).filter(r => r.ties && r.ties.length);
+    if (!live.length) return el('div', { class: 'empty', text: 'No bracket yet.' });
+
+    const wrap = el('div', { class: 'radial' });
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 100 100');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    wrap.appendChild(svg);
+
+    // Ring radii in percent, outermost first, leaving the centre for the
+    // champion. Two rounds would otherwise sit on top of each other.
+    const ringCount = live.length + 1;
+    const outer = 44;
+    const radiusOf = i => outer * (1 - i / ringCount);
+
+    // Place round 0 evenly around the circle; every later node sits at the
+    // average angle of the two ties that fed it, so the tree converges.
+    let angles = [];
+    const nodes = [];
+
+    live.forEach((round, ri) => {
+      const r = radiusOf(ri);
+      const next = [];
+      round.ties.forEach((tie, ti) => {
+        const sides = [tie.home, tie.away];
+        sides.forEach((id, si) => {
+          const idx = ti * 2 + si;
+          let ang;
+          if (ri === 0) ang = (idx / (round.ties.length * 2)) * Math.PI * 2 - Math.PI / 2;
+          else ang = angles[idx] !== undefined ? angles[idx]
+            : (idx / (round.ties.length * 2)) * Math.PI * 2 - Math.PI / 2;
+          nodes.push({ id: id, ang: ang, r: r, tie: tie, round: ri,
+            score: tie.played ? (si === 0 ? tie.hg : tie.ag) : null,
+            out: tie.played && tie.winner && tie.winner !== id });
+          next[ti] = next[ti] === undefined ? ang : (next[ti] + ang) / 2;
+        });
+      });
+      angles = next;
+    });
+
+    // The champion, dead centre.
+    const lastRound = live[live.length - 1];
+    const finalTie = lastRound.ties[0];
+    const champ = finalTie && finalTie.winner;
+    if (champ) nodes.push({ id: champ, ang: 0, r: 0, round: live.length, champ: true });
+
+    function xy(node) {
+      return { x: 50 + node.r * Math.cos(node.ang), y: 50 + node.r * Math.sin(node.ang) };
+    }
+
+    // Lines: each competitor joins the point its tie resolves to.
+    live.forEach((round, ri) => {
+      const inner = radiusOf(ri + 1);
+      round.ties.forEach((tie, ti) => {
+        const mine = nodes.filter(n => n.round === ri && n.tie === tie);
+        if (mine.length < 2) return;
+        const mid = (mine[0].ang + mine[1].ang) / 2;
+        const join = { x: 50 + inner * Math.cos(mid), y: 50 + inner * Math.sin(mid) };
+        mine.forEach(n => {
+          const p = xy(n);
+          const line = document.createElementNS(NS, 'path');
+          line.setAttribute('d', 'M ' + p.x + ' ' + p.y + ' L ' + join.x + ' ' + join.y);
+          line.setAttribute('class', 'radial-line' +
+            (tie.winner === n.id ? ' won' : ''));
+          svg.appendChild(line);
+        });
+      });
+    });
+
+    nodes.forEach(n => {
+      const p = xy(n);
+      const node = el('div', { class: 'radial-node' +
+        (n.out ? ' out' : '') + (n.champ ? ' champ' : '') +
+        (o.isMine && o.isMine(n.id) ? ' mine' : '') });
+      node.style.left = p.x + '%';
+      node.style.top = p.y + '%';
+      const b = o.badge ? o.badge(n.id) : el('div', { class: 'badge badge-sm' });
+      if (b) node.appendChild(b);
+      if (n.score !== null && n.score !== undefined) {
+        node.appendChild(el('div', { class: 'rn-score',
+          text: String(n.score) + (n.tie && n.tie.pens ? ' p' : '') }));
+      }
+      node.title = (o.label ? o.label(n.id) : '') +
+        (n.champ ? ' — winners' : '');
+      wrap.appendChild(node);
+    });
+
+    const holder = el('div');
+    holder.appendChild(wrap);
+    holder.appendChild(el('div', { class: 'radial-hint',
+      text: live.length + ' rounds · outer ring is the ' +
+        C.roundName(live[0].ties.length * 2, '') + ', the winner sits at the centre' }));
+    return holder;
+  };
+
   /** One cup or continental competition, rendered on its own. */
   SC.competitionCard = function (comp) {
     const club = myClub();
     {
       const body = el('div');
       if (comp.type === 'cup') {
-        const br = el('div', { class: 'bracket' });
+        body.appendChild(SC.radialBracket(comp.rounds, {
+          badge: id => UI.badge(FCM.DB.clubById[id], 'sm'),
+          label: id => (FCM.DB.clubById[id] || {}).name || '',
+          isMine: id => !!club && id === club.id
+        }));
+        const br = el('div', { class: 'bracket', style: 'display:none' });
         comp.rounds.forEach((round, ri) => {
           const col = el('div', { class: 'br-round' });
           const left = round.ties.length * 2 + round.byes.length;
@@ -2746,7 +2953,7 @@
               const won = tie.winner === cid;
               const row = el('div', { class: 'br-team ' + (tie.played ? (won ? 'won' : 'lost') : '') });
               row.appendChild(el('span', { text: c ? c.name.slice(0, 20) : '—',
-                style: cid === club.id ? 'color:var(--accent)' : '' }));
+                style: (club && cid === club.id) ? 'color:var(--accent)' : '' }));
               row.appendChild(el('span', { class: 'mono', text: tie.played ? g : '' }));
               box.appendChild(row);
             });
@@ -2767,7 +2974,12 @@
       } else if (comp.type === 'continental') {
         // Once the league phase is done the bracket is the story.
         if (comp.phase !== 'league' && (comp.rounds || []).length) {
-          const br = el('div', { class: 'bracket' });
+          body.appendChild(SC.radialBracket(comp.rounds, {
+            badge: id => UI.badge(FCM.DB.clubById[id], 'sm'),
+            label: id => (FCM.DB.clubById[id] || {}).name || '',
+            isMine: id => !!club && id === club.id
+          }));
+          const br = el('div', { class: 'bracket', style: 'display:none' });
           comp.rounds.forEach(round => {
             const col = el('div', { class: 'br-round' });
             col.appendChild(el('div', { class: 'br-title',
@@ -2780,7 +2992,7 @@
                 const row = el('div', { class: 'br-team ' +
                   (tie.played ? (won ? 'won' : 'lost') : '') });
                 row.appendChild(el('span', { text: c ? c.name.slice(0, 20) : '—',
-                  style: cid === club.id ? 'color:var(--accent)' : '' }));
+                  style: (club && cid === club.id) ? 'color:var(--accent)' : '' }));
                 row.appendChild(el('span', { class: 'mono', text: tie.played ? g : '' }));
                 box.appendChild(row);
               });

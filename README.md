@@ -126,6 +126,19 @@ academy, staff, stadium, records and awards.
 - Individual programmes per player (shooting, passing, pace…), which work
   fastest on under-23s
 
+**Contracts, agents and free transfers**
+- A **Contracts Expiring** panel sits on the Home tab all season. From
+  January, rival clubs can agree **pre-contracts** with anyone whose deal is
+  running down — and then you lose him for nothing in the summer
+- Whether he re-signs depends on how you have treated him: minutes played,
+  morale, and whether you have broken a promise to him before. A frozen-out
+  player is *reluctant* and has to be paid well over the odds; a happy
+  regular is *keen* and signs for the going rate
+- **Agents take a cut** of every deal, scaling with the player's standing and
+  ambition. It comes straight out of the balance
+- Paying up tears a pre-contract back up — which is usually cheaper than
+  replacing him
+
 **Club takeovers**
 - Clubs change hands over the summer — yours and everyone else's — and a new
   owner can rewrite the job overnight

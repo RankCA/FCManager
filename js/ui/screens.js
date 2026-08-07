@@ -100,6 +100,41 @@
     const qCard = SC.qualifyingCard();
     if (qCard) left.appendChild(qCard);
 
+    // --- Contracts running down ---
+    const expiring = FCM.CN.expiringSquad(club, s);
+    if (expiring.length) {
+      const box = el('div');
+      const lost = expiring.filter(p => p.preContract).length;
+      box.appendChild(el('div', { class: 'tiny mute2', style: 'margin-bottom:8px',
+        text: lost
+          ? lost + ' of these have already agreed to join someone else. ' +
+            'You can still buy them back with a big enough offer.'
+          : 'From January rivals can agree pre-contracts with any of them.' }));
+      expiring.slice(0, 6).forEach(p => {
+        const row = el('div', { class: 'row-between small season-row' });
+        const left2 = el('div', { class: 'row', style: 'gap:7px;min-width:0' });
+        left2.appendChild(UI.posPill(p.pos[0]));
+        left2.appendChild(UI.playerLink(p));
+        row.appendChild(left2);
+        const right2 = el('div', { class: 'row', style: 'gap:7px' });
+        if (p.preContract) {
+          const dest = FCM.DB.clubById[p.preContract];
+          right2.appendChild(el('span', { class: 'pill pill-bad',
+            text: '→ ' + (dest ? dest.short || dest.name : 'leaving') }));
+        } else {
+          right2.appendChild(el('span', { class: 'tiny mute2',
+            text: FCM.CN.monthsLeft(p, s) + ' mths' }));
+        }
+        right2.appendChild(el('button', { class: 'btn btn-sm', text: 'Talk',
+          onclick: function (e) { e.stopPropagation(); SC.negotiateContract(p); } }));
+        row.appendChild(right2);
+        box.appendChild(row);
+      });
+      const card = UI.card('Contracts Expiring · ' + expiring.length, box);
+      if (lost) card.style.borderColor = 'var(--red)';
+      left.appendChild(card);
+    }
+
     // --- The press want a word before the next game ---
     if (SC.pressAvailable()) {
       const pb = el('div');
@@ -2374,11 +2409,35 @@
   };
 
   SC.negotiateContract = function (p) {
-    const club = myClub();
-    const demand = P.wageDemand(p, club.rep);
+    const s = S(), club = myClub();
+    const stance = FCM.CN.renewalStance(p, club, s);
+    const demand = stance.demand;
     const body = el('div');
     body.appendChild(el('p', { style: 'margin:0 0 12px',
       text: p.name + ' is asking for around ' + U.wage(demand) + ' to extend his deal.' }));
+
+    // Where he actually stands, and what his agent will take out of it.
+    const stanceBox = el('div', { class: 'kv', style: 'margin-bottom:12px' });
+    const moodText = { keen: 'Keen to stay', open: 'Open to talks',
+      reluctant: 'Reluctant — he is thinking about his options' }[stance.mood];
+    const rows = [['His mood', moodText],
+      ['Contract', FCM.CN.expiring(p, s)
+        ? 'Expires this summer (' + FCM.CN.monthsLeft(p, s) + ' months)'
+        : 'Until ' + p.contractUntil],
+      ["Agent's fee", U.money(stance.agentFee) + ' on signing']];
+    if (p.preContract) {
+      const dest = FCM.DB.clubById[p.preContract];
+      rows.push(['Warning', 'Has agreed a pre-contract with ' +
+        (dest ? dest.name : 'another club')]);
+    }
+    if ((p.trustBroken || 0) > 0) {
+      rows.push(['Trust', 'You have broken your word to him before']);
+    }
+    rows.forEach(([k, v]) => {
+      stanceBox.appendChild(el('div', { class: 'k', text: k }));
+      stanceBox.appendChild(el('div', { class: 'v', text: v }));
+    });
+    body.appendChild(stanceBox);
     const wageFld = el('label', { class: 'fld' });
     wageFld.appendChild(el('span', { text: 'Weekly wage (£)' }));
     const wageIn = UI.moneyInput(demand);
@@ -2398,18 +2457,32 @@
       el('button', { class: 'btn', text: 'Cancel', onclick: UI.closeModal }),
       el('button', { class: 'btn btn-primary', text: 'Offer contract', onclick: function () {
         const wage = UI.readMoney(wageIn);
-        if (wage < demand * 0.92) {
+        // A player who does not want to be here has to be paid over the odds.
+        const floor = demand * (stance.mood === 'reluctant' ? 1.15
+          : (stance.mood === 'open' ? 0.98 : 0.92));
+        if (wage < floor) {
           fb.style.color = 'var(--gold)';
-          fb.textContent = 'He rejected that. He is looking for closer to ' + U.wage(demand) + '.';
+          fb.textContent = stance.mood === 'reluctant'
+            ? 'He turned it down. He is not sure he wants to stay, and it would ' +
+              'take well over ' + U.wage(demand) + ' to change that.'
+            : 'He rejected that. He is looking for closer to ' + U.wage(demand) + '.';
           return;
         }
         p.wage = wage;
         p.contractUntil = p.seasonYear + Number(yrIn.value);
         p.morale = U.clamp(p.morale + 10, 0, 100);
         p.contractWarned = false;
+        // Signing him off a pre-contract is the whole point of paying up.
+        const rescued = !!p.preContract;
+        p.preContract = null;
+        const fee = FCM.CN.agentFee(p, wage);
+        club.balance -= fee;
+        FCM.F.addExpense(s, 'wages', fee);
         P.recalcValue(p);
         UI.closeModal();
-        UI.toast(p.name + ' signed a new deal until ' + p.contractUntil);
+        UI.toast(p.name + ' signed until ' + p.contractUntil +
+          ' · agent fee ' + U.money(fee) +
+          (rescued ? ' · pre-contract torn up' : ''));
         FCM.App.render();
       } })
     ]);

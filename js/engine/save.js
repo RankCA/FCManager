@@ -17,7 +17,7 @@
     'goalBonus', 'squadRole', 'loanedTo', 'loanFrom', 'loanUntil', 'loanWageShare',
     'freeSince', 'trainingFocus', 'loanListed', 'loanOptionToBuy',
     'transferRequested', 'promisedGameTime', 'tag',
-    'promise', 'trustBroken', 'lastChatDay'];
+    'promise', 'trustBroken', 'lastChatDay', 'preContract'];
 
   // Floats carry ~15 digits in JSON; two decimals is plenty and much smaller.
   const ROUND2 = { form: 1, fitness: 1, morale: 1, xp: 1, valMult: 1, wageMult: 1 };

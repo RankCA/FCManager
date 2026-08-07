@@ -21,7 +21,7 @@
    'js/core/util.js', 'js/core/names.js',
    'js/engine/player.js', 'js/engine/tactics.js', 'js/engine/match.js',
    'js/engine/youth.js', 'js/engine/finance.js', 'js/engine/morale.js',
-   'js/engine/difficulty.js', 'js/engine/training.js', 'js/engine/manmgmt.js', 'js/engine/scouting.js', 'js/engine/owners.js',
+   'js/engine/difficulty.js', 'js/engine/training.js', 'js/engine/manmgmt.js', 'js/engine/scouting.js', 'js/engine/owners.js', 'js/engine/contracts.js',
    'js/engine/nations.js',
    'js/engine/international.js',
    'js/data/db-clubs.js', 'js/data/db-nations.js', 'js/data/db-names.js',
@@ -690,6 +690,70 @@ assert(OW.takeover(twice, c1, new FCM.RNG(3), 'sugar') === null,
 
 // Restore the shared club object the later sections read.
 owClub.transferBudget = baseBudget; owClub.rep = baseRep;
+
+// ------------------------------------------------- contracts and agents
+h2('18. Contracts, agents and pre-contracts');
+const CN = FCM.CN;
+const cnClub = DB.clubs.find(c => c.name === 'Arsenal');
+const cnSquad = FCM.DB.squadOf(cnClub);
+const cnState = { season: 2025, day: 60, userClubId: cnClub.id };
+
+const runner = cnSquad[2];
+runner.contractUntil = 2025; runner.preContract = null;
+assert(CN.expiring(runner, cnState), 'a deal ending this season reads as expiring');
+assert(!CN.expiring(cnSquad[3], Object.assign({}, cnState, { season: 2020 })),
+  'a deal with years left does not');
+assert(CN.expiringSquad(cnClub, cnState).some(p => p.id === runner.id),
+  'he appears on the expiring list');
+
+// The agent's cut has to scale with the player.
+const cnStar = U.sortBy(cnSquad, p => p.ovr, true)[0];
+const cnFiller = U.sortBy(cnSquad, p => p.ovr, false)[0];
+assert(CN.agentFee(cnStar, 200000) > CN.agentFee(cnFiller, 200000),
+  'a better player commands a bigger agent fee',
+  U.money(CN.agentFee(cnStar, 200000)) + ' v ' + U.money(CN.agentFee(cnFiller, 200000)));
+
+// Willingness has to respond to how he has been treated.
+const happy = cnSquad[4];
+happy.morale = 90; happy.apps = 20; happy.trustBroken = 0; happy.age = 27;
+const sour = cnSquad[5];
+sour.morale = 20; sour.apps = 1; sour.trustBroken = 2; sour.age = 27;
+const sHappy = CN.renewalStance(happy, cnClub, cnState);
+const sSour = CN.renewalStance(sour, cnClub, cnState);
+log('  keen: ' + sHappy.willing.toFixed(2) + ' (' + sHappy.mood + ')  ·  ' +
+  'sour: ' + sSour.willing.toFixed(2) + ' (' + sSour.mood + ')', 'dim');
+assert(sHappy.willing > sSour.willing + 0.3,
+  'a happy regular is far likelier to re-sign than a frozen-out one');
+assert(sSour.mood === 'reluctant', 'the frozen-out player is reluctant');
+
+// Pre-contracts must be impossible before January and possible after.
+const early = Object.assign({}, cnState, { day: CN.PRECONTRACT_DAY - 1 });
+runner.preContract = null;
+let gotEarly = null;
+for (let i = 0; i < 300 && !gotEarly; i++) {
+  gotEarly = CN.rivalInterest(runner, early, new FCM.RNG(i));
+}
+assert(!gotEarly, 'nobody can agree a pre-contract before January');
+
+const late = Object.assign({}, cnState, { day: CN.PRECONTRACT_DAY + 20 });
+runner.morale = 15; runner.apps = 0; runner.ovr = Math.max(runner.ovr, 80);
+let gotLate = null;
+for (let i = 0; i < 400 && !gotLate; i++) {
+  gotLate = CN.rivalInterest(runner, late, new FCM.RNG(i));
+}
+assert(!!gotLate, 'an unhappy player in his final months attracts a pre-contract',
+  gotLate ? gotLate.name : 'none in 400 rolls');
+assert(runner.preContract === (gotLate ? gotLate.id : null),
+  'the pre-contract is recorded on the player');
+
+// And completing it actually moves him.
+if (gotLate) {
+  const fromSize = cnClub.squad.length;
+  CN.completeFreeTransfer(runner, gotLate, cnState, new FCM.RNG(9));
+  assert(runner.clubId === gotLate.id, 'he joins them on a free');
+  assert(cnClub.squad.length === fromSize - 1, 'and leaves the old squad');
+  assert(runner.preContract === null, 'the pre-contract is cleared');
+}
 
 h2(fails === 0 ? 'ALL TESTS PASSED' : fails + ' TEST(S) FAILED');
 document.title = fails === 0 ? 'PASS' : 'FAIL(' + fails + ')';

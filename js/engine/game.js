@@ -1092,6 +1092,18 @@
     });
     FCM.MM.spreadMood(meClub, rng);
 
+    // From January, rivals can agree pre-contracts with anyone whose deal is
+    // running down. Losing a good player for nothing is a real failure state.
+    FCM.CN.expiringSquad(meClub, s).forEach(p => {
+      if (p.preContract) return;
+      const buyer = FCM.CN.rivalInterest(p, s, rng);
+      if (!buyer) return;
+      G.news(p.name + ' has agreed to join ' + buyer.name,
+        'His contract expires this summer and ' + buyer.name + ' have agreed a ' +
+        'pre-contract. He leaves for nothing unless you can change his mind.',
+        'contract', { type: 'precontract', player: p.id });
+    });
+
     // Wages the user pays toward players loaned out elsewhere.
     FCM.DB.players.forEach(p => {
       if (p.loanFrom === s.userClubId && p.loanedTo) {
@@ -1717,6 +1729,20 @@
           if (p.age >= 33) chance -= 0.30;
           if (p.age <= 23) chance += 0.10;
           keep = rng.chance(U.clamp(chance, 0.05, 0.97));
+        }
+        // A pre-contract signed in January overrides everything.
+        if (p.preContract) {
+          const dest = FCM.DB.clubById[p.preContract];
+          if (dest) {
+            FCM.CN.completeFreeTransfer(p, dest, s, rng);
+            if (club.id === s.userClubId) {
+              G.news(p.name + ' has left for ' + dest.name,
+                'His pre-contract takes effect. He cost us nothing to lose, ' +
+                'which is exactly the problem.', 'contract');
+            }
+            return;
+          }
+          p.preContract = null;
         }
         if (keep) {
           p.contractUntil = s.season + rng.int(2, 4);

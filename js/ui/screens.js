@@ -1834,41 +1834,86 @@
   };
 
   /** Competitions hub: league tables, cups and Europe together. */
+  /**
+   * Everything on offer, in the order a manager cares about: your own
+   * league, then the cups you are actually in, then the rest of the world.
+   */
+  SC.competitionList = function () {
+    const s = S(), club = myClub();
+    const out = [];
+    const myLeague = FCM.DB.leagueById[club.league];
+    if (myLeague && s.competitions['league:' + myLeague.id]) {
+      out.push({ key: 'league:' + myLeague.id, label: myLeague.name,
+        group: 'Yours', comp: null, league: myLeague });
+    }
+    const cups = Object.values(s.competitions).filter(c => c.type !== 'league');
+    cups.forEach(c => {
+      const mine = (c.entrants || []).indexOf(club.id) >= 0;
+      out.push({ key: c.id, label: c.name, group: mine ? 'Yours' : 'Elsewhere', comp: c });
+    });
+    FCM.DB.leagues.forEach(l => {
+      if (myLeague && l.id === myLeague.id) return;
+      if (!s.competitions['league:' + l.id]) return;
+      out.push({ key: 'league:' + l.id, label: l.country + ' · ' + l.name,
+        group: 'Other leagues', comp: null, league: l });
+    });
+    return out;
+  };
+
   SC.competitionsHub = function () {
     const wrap = el('div', { class: 'stack' });
-    if (!FCM.App.compView) FCM.App.compView = 'tables';
-    const seg = el('div', { class: 'seg' });
-    [['tables', 'League Tables'], ['cups', 'Cups & Europe']].forEach(([id, label]) => {
-      const b = el('button', { class: 'seg-btn' +
-        (FCM.App.compView === id ? ' active' : ''), text: label });
-      b.addEventListener('click', function () { FCM.App.compView = id; FCM.App.render(); });
-      seg.appendChild(b);
+    const list = SC.competitionList();
+    if (!list.length) {
+      wrap.appendChild(el('div', { class: 'empty', text: 'No competitions running.' }));
+      return wrap;
+    }
+    // Fall back to your own league if the remembered choice has ended.
+    if (!FCM.App.compKey || !list.some(x => x.key === FCM.App.compKey)) {
+      FCM.App.compKey = list[0].key;
+    }
+    const current = list.find(x => x.key === FCM.App.compKey);
+
+    // One picker rather than a page of stacked cards.
+    const bar = el('div', { class: 'filters' });
+    const sel = el('select', { style: 'min-width:220px;max-width:100%' });
+    ['Yours', 'Elsewhere', 'Other leagues'].forEach(groupName => {
+      const inGroup = list.filter(x => x.group === groupName);
+      if (!inGroup.length) return;
+      const og = el('optgroup');
+      og.label = groupName;
+      inGroup.forEach(x => og.appendChild(
+        el('option', { value: x.key, text: x.label })));
+      sel.appendChild(og);
     });
-    wrap.appendChild(seg);
-    wrap.appendChild(FCM.App.compView === 'tables' ? SC.table() : SC.competitions());
+    sel.value = FCM.App.compKey;
+    sel.addEventListener('change', function () {
+      FCM.App.compKey = sel.value;
+      FCM.App.render();
+    });
+    bar.appendChild(el('span', { class: 'small muted', text: 'Competition' }));
+    bar.appendChild(sel);
+    bar.appendChild(el('span', { class: 'spacer' }));
+    bar.appendChild(FCM.CT.pill(current.key, current.label));
+    wrap.appendChild(bar);
+
+    wrap.appendChild(current.comp
+      ? SC.competitionCard(current.comp)
+      : SC.table(current.league.id));
     return wrap;
   };
 
   // =====================================================================
   // League table
   // =====================================================================
-  SC.table = function () {
+  SC.table = function (leagueId) {
     const club = myClub();
     const wrap = el('div');
-    const leagues = FCM.DB.leagues.filter(l => S().competitions['league:' + l.id]);
-
-    const filters = el('div', { class: 'filters' });
-    const sel = el('select');
-    leagues.forEach(l => sel.appendChild(el('option', { value: l.id, text: l.country + ' · ' + l.name })));
-    sel.value = FCM.App.tableLeague || club.league;
-    filters.appendChild(sel);
-    wrap.appendChild(filters);
 
     const holder = el('div');
     wrap.appendChild(holder);
 
     function draw() {
-      const lid = Number(sel.value);
+      const lid = Number(leagueId || FCM.App.tableLeague || club.league);
       FCM.App.tableLeague = lid;
       const league = FCM.DB.leagueById[lid];
       const rows = G().leagueTable(lid);
@@ -1917,7 +1962,6 @@
       });
       holder.appendChild(key);
     }
-    sel.addEventListener('change', draw);
     draw();
     return wrap;
   };
@@ -2676,16 +2720,10 @@
   // =====================================================================
   // Competitions (cups + Europe)
   // =====================================================================
-  SC.competitions = function () {
-    const wrap = el('div', { class: 'stack' });
-    const comps = Object.values(S().competitions).filter(c => c.type !== 'league');
+  /** One cup or continental competition, rendered on its own. */
+  SC.competitionCard = function (comp) {
     const club = myClub();
-
-    // Ones involving the user first.
-    const mine = comps.filter(c => (c.entrants || []).indexOf(club.id) >= 0);
-    const others = comps.filter(c => mine.indexOf(c) < 0);
-
-    (mine.concat(others)).forEach(comp => {
+    {
       const body = el('div');
       if (comp.type === 'cup') {
         const br = el('div', { class: 'bracket' });
@@ -2744,11 +2782,8 @@
         const h = headEl.querySelector('h3');
         if (h) h.style.color = FCM.CT.accent(comp.id);
       }
-      wrap.appendChild(card);
-    });
-
-    if (!comps.length) wrap.appendChild(el('div', { class: 'empty', text: 'No cup competitions running.' }));
-    return wrap;
+      return card;
+    }
   };
 
   // =====================================================================

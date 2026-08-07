@@ -86,7 +86,7 @@ max out board confidence.
 Eleven tabs, no sub-tab mazes: **Home · Squad · Tactics · Schedule ·
 Competitions · Transfers · Club · Career · Finances**, plus ⚡ Sandbox (god mode
 only) and ⚙ Settings. Schedule holds the calendar and fixture list;
-Competitions holds tables, cups, Europe and internationals; Club holds the
+Competitions shows one competition at a time from a grouped picker (yours first, then the rest of the world); Club holds the
 academy, staff, stadium, records and awards.
 
 **Career progression**

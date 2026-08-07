@@ -104,6 +104,8 @@
     // Every nation needs a legal squad, whether or not its players happen to
     // play in one of the 22 leagues we model.
     FCM.NT.fillPools(rng, startYear, G._usedNames);
+    // Give every other club a manager, so the job market is a world.
+    FCM.MG.populate(s, rng, G._usedNames);
 
     // Difficulty shapes the budget you inherit.
     const level = FCM.D.get(s.difficulty);
@@ -456,6 +458,22 @@
       });
 
       f.played = true; f.hg = res.homeGoals; f.ag = res.awayGoals;
+      FCM.MG.recordResult(s, home.id, res.homeGoals - res.awayGoals > 0 ? 1
+        : (res.homeGoals === res.awayGoals ? 0 : -1));
+      FCM.MG.recordResult(s, away.id, res.awayGoals - res.homeGoals > 0 ? 1
+        : (res.homeGoals === res.awayGoals ? 0 : -1));
+      if (home.id === s.userClubId || away.id === s.userClubId) {
+        const h = FCM.MG.heatFromMatch(f, res.homeGoals, res.awayGoals);
+        const before = FCM.MG.grudge(s, home.id, away.id);
+        const after = FCM.MG.addHeat(s, home.id, away.id, h.heat, h.reason);
+        // Tell the manager the first time a fixture becomes a grudge match.
+        if (before < FCM.MG.HEAT_DERBY && after >= FCM.MG.HEAT_DERBY) {
+          const them = FCM.DB.clubById[home.id === s.userClubId ? away.id : home.id];
+          G.news('A rivalry has formed with ' + them.name,
+            'These games have taken on an edge of their own. ' + them.name +
+            ' now count as a derby.', 'info');
+        }
+      }
       // Only the user's matches keep a full result. Retaining events and
       // ratings for all ~7,600 worldwide fixtures would bloat saves to
       // tens of megabytes and blow the localStorage quota.
@@ -1711,6 +1729,17 @@
     G.startQualifying();
     // Clubs change hands over the summer, which can rewrite your job.
     const takeover = FCM.OW.seasonRoll(s, G.rng);
+    // Managers lose jobs and get poached; grudges cool if you stop meeting.
+    FCM.MG.populate(s, G.rng, G._usedNames);
+    FCM.MG.decay(s);
+    const churn = FCM.MG.seasonChurn(s, G.rng);
+    churn.slice(0, 6).forEach(mv => {
+      G.news(mv.in.name + ' takes over at ' + mv.club.name,
+        mv.out.name + ' has left after ' + mv.out.wins + 'W ' + mv.out.draws + 'D ' +
+        mv.out.losses + 'L. ' + mv.in.name + ' arrives' +
+        (mv.poachedFrom ? ' from ' + mv.poachedFrom.name : '') + ', a ' +
+        FCM.MG.STYLES[mv.in.style].label.toLowerCase() + ' coach.', 'info');
+    });
     G.setBoardExpectation();
     if (takeover) {
       const owner = FCM.OW.TYPES[takeover.type];

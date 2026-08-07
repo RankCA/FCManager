@@ -205,8 +205,19 @@ academy, staff, stadium, records and awards.
   runs, trophy cabinet, squad leaders
 - **Season objectives** from the board, each with a confidence and cash
   reward, tracked live
-- **Derbies** carry extra weight — the fixture list knows about 30 real
-  rivalries from the Manchester derby to the Old Firm
+- **Derbies** carry extra weight — 30 real rivalries from the Manchester
+  derby to the Old Firm, *plus any you earn*. Repeated cup knockouts and
+  heavy defeats build heat between two clubs, and past a threshold the
+  fixture becomes a derby in its own right, announced when it happens.
+  Grudges cool if you stop meeting
+
+**The rest of the managerial world**
+- All 399 other clubs have a **named manager** with a nationality, a
+  tactical identity and a reputation of their own
+- They are **sacked for bad seasons and poached for good ones**, so the job
+  you want opens because somebody actually lost theirs, and the coach who
+  keeps beating you moves up the league
+- Scout reports name the man in the opposite dugout and flag any bad blood
 
 **Competition identity**
 - Every tournament has its own colour — Premier League purple, FA Cup red,

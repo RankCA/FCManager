@@ -42,8 +42,16 @@
     if (!rivalIndex) buildRivalIndex();
     return rivalIndex[clubId] || [];
   };
-  AW.isDerby = function (aId, bId) {
-    return AW.rivalsOf(aId).indexOf(bId) >= 0;
+  /**
+   * A derby is either a historic rivalry or one earned in this save. The
+   * hard-coded list only knows about the Manchester derby and the Old Firm;
+   * four cup exits to the same club should count for just as much.
+   */
+  AW.isDerby = function (aId, bId, state) {
+    if (AW.rivalsOf(aId).indexOf(bId) >= 0) return true;
+    const s = state || (FCM.G && FCM.G.state);
+    if (!s || !FCM.MG) return false;
+    return FCM.MG.grudge(s, aId, bId) >= FCM.MG.HEAT_DERBY;
   };
 
   // ---- Player of the Month --------------------------------------------

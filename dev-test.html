@@ -21,7 +21,7 @@
    'js/core/util.js', 'js/core/names.js',
    'js/engine/player.js', 'js/engine/tactics.js', 'js/engine/match.js',
    'js/engine/youth.js', 'js/engine/finance.js', 'js/engine/morale.js',
-   'js/engine/difficulty.js', 'js/engine/training.js', 'js/engine/manmgmt.js', 'js/engine/scouting.js', 'js/engine/owners.js', 'js/engine/contracts.js',
+   'js/engine/difficulty.js', 'js/engine/training.js', 'js/engine/manmgmt.js', 'js/engine/scouting.js', 'js/engine/owners.js', 'js/engine/awards.js', 'js/engine/contracts.js', 'js/engine/managers.js',
    'js/engine/nations.js',
    'js/engine/international.js',
    'js/data/db-clubs.js', 'js/data/db-nations.js', 'js/data/db-names.js',
@@ -759,6 +759,65 @@ if (gotLate) {
   assert(cnClub.squad.length === fromSize - 1, 'and leaves the old squad');
   assert(runner.preContract === null, 'the pre-contract is cleared');
 }
+
+// ------------------------------------------- rival managers and grudges
+h2('19. Rival managers and dynamic derbies');
+const MG = FCM.MG;
+const mgState = { season: 2025, day: 100, userClubId: liv.id, managers: {},
+  grudges: {}, grudgeLog: {} };
+FCM.G = FCM.G || {};
+FCM.G._usedNames = new Set();
+MG.populate(mgState, new FCM.RNG(4), FCM.G._usedNames);
+assert(Object.keys(mgState.managers).length === DB.clubs.length - 1,
+  'every club except yours has a manager', Object.keys(mgState.managers).length);
+const anyMgr = mgState.managers[bur.id];
+assert(anyMgr && anyMgr.name && anyMgr.name.indexOf('undefined') < 0,
+  'managers have real names', anyMgr ? anyMgr.name : '');
+assert(!!MG.STYLES[anyMgr.style], 'and a tactical style', anyMgr.style);
+log('  ' + bur.name + ': ' + anyMgr.name + ' (' + MG.STYLES[anyMgr.style].label + ')', 'dim');
+
+// Grudges must build from play and count as derbies past the threshold.
+assert(!FCM.AW.isDerby(liv.id, bur.id, mgState), 'no rivalry to begin with');
+for (let i = 0; i < 5; i++) MG.addHeat(mgState, liv.id, bur.id, 12, 'cup exit');
+assert(MG.grudge(mgState, liv.id, bur.id) >= MG.HEAT_DERBY,
+  'repeated meetings build heat', MG.grudge(mgState, liv.id, bur.id));
+assert(FCM.AW.isDerby(liv.id, bur.id, mgState),
+  'and the fixture becomes a derby');
+// Hard-coded rivalries still stand on their own.
+const mgUtd = DB.clubs.find(c => c.name === 'Manchester United');
+const mgMci = DB.clubs.find(c => c.name === 'Manchester City');
+if (mgUtd && mgMci) {
+  assert(FCM.AW.isDerby(mgUtd.id, mgMci.id, mgState),
+    'the historic derbies still count with no heat at all');
+}
+// And they cool if you stop meeting.
+const mgHot = MG.grudge(mgState, liv.id, bur.id);
+MG.decay(mgState);
+assert(MG.grudge(mgState, liv.id, bur.id) < mgHot, 'grudges cool over time',
+  mgHot + ' -> ' + MG.grudge(mgState, liv.id, bur.id));
+assert(MG.grudgesOf(mgState, liv.id).some(g => g.club.id === bur.id),
+  'the rivalry is listed against the club');
+
+// Heat has to reflect what actually happened, not just that a game occurred.
+const routine = MG.heatFromMatch({ comp: 'league:13' }, 1, 0);
+const thrashing = MG.heatFromMatch({ comp: 'cup:England' }, 6, 0);
+assert(thrashing.heat > routine.heat * 2,
+  'a cup hammering generates far more bad blood than a routine win',
+  thrashing.heat + ' v ' + routine.heat);
+
+// Churn: bad seasons cost managers their jobs.
+Object.keys(mgState.managers).forEach(id => {
+  const m = mgState.managers[id];
+  m.games = 30; m.wins = 3; m.draws = 5; m.losses = 22;
+});
+const mgMoves = MG.seasonChurn(mgState, new FCM.RNG(8));
+assert(mgMoves.length > 0, 'a season of bad results costs managers their jobs',
+  mgMoves.length + ' changes');
+assert(mgMoves.every(mv => mv.in && mv.in.name && mv.in !== mv.out),
+  'each opening is filled by somebody new');
+assert(Object.values(mgState.managers).every(m => m.games === 0),
+  'records reset for the new season');
+FCM.G._usedNames = null;
 
 h2(fails === 0 ? 'ALL TESTS PASSED' : fails + ' TEST(S) FAILED');
 document.title = fails === 0 ? 'PASS' : 'FAIL(' + fails + ')';

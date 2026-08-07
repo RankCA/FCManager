@@ -3135,8 +3135,15 @@
     const body = el('div', { class: 'stack' });
 
     const head = el('div', { class: 'kv' });
-    [['Formation', rep.formation],
+    const oppMgr = FCM.MG.at(s, oppClub.id);
+    const heat = FCM.MG.grudge(s, club.id, oppClub.id);
+    [['Manager', oppMgr
+       ? oppMgr.name + ' · ' + FCM.MG.STYLES[oppMgr.style].label
+       : 'Unknown'],
+     ['Formation', rep.formation],
      ['Recent form', rep.form.length ? rep.form.join(' ') : 'No games yet'],
+     ['Bad blood', heat >= FCM.MG.HEAT_DERBY ? '🔥 Derby (' + Math.round(heat) + ')'
+       : (heat > 12 ? 'Some history (' + Math.round(heat) + ')' : 'None')],
      ['Their XI', rep.xiRating + ' · ours ' + rep.ourXiRating],
      ['Their att / mid / def', rep.units.att + ' · ' + rep.units.mid + ' · ' + rep.units.def],
      ['Ours', rep.ourUnits.att + ' · ' + rep.ourUnits.mid + ' · ' + rep.ourUnits.def]
@@ -4175,6 +4182,8 @@
      ['Average rating', Math.round(U.mean(squad, p => p.ovr))],
      ['Transfer budget', U.money(club.transferBudget)],
      ['Ownership', FCM.OW.ownerOf(S(), club).label],
+     ['Manager', club.id === S().userClubId ? S().managerName + ' (you)'
+       : ((FCM.MG.at(S(), club.id) || {}).name || '—')],
      ['Reputation', Math.round(club.rep) + '/100']].forEach(([k, v]) => {
       kv.appendChild(el('div', { class: 'k', text: k }));
       kv.appendChild(el('div', { class: 'v', text: v }));

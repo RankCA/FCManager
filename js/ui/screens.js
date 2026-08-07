@@ -503,6 +503,14 @@
     body.appendChild(el('p', { text: item.body, style: 'margin:0 0 14px;line-height:1.65' }));
     let foot = [el('button', { class: 'btn', text: 'Close', onclick: UI.closeModal })];
 
+    // Almost every prompt is about a specific player, and you cannot decide
+    // anything without looking at him first.
+    const subject = FCM.DB.byId[item.player];
+    if (subject) {
+      foot.unshift(el('button', { class: 'btn', text: '👤 View ' + subject.name,
+        onclick: function () { UI.closeModal(); UI.playerProfile(subject); } }));
+    }
+
     if (item.type === 'youth-intake') {
       const intake = S().lastIntake;
       const crop = ((intake && intake.ids) || []).map(id => FCM.DB.byId[id]).filter(Boolean);
@@ -2757,6 +2765,40 @@
           ]));
         }
       } else if (comp.type === 'continental') {
+        // Once the league phase is done the bracket is the story.
+        if (comp.phase !== 'league' && (comp.rounds || []).length) {
+          const br = el('div', { class: 'bracket' });
+          comp.rounds.forEach(round => {
+            const col = el('div', { class: 'br-round' });
+            col.appendChild(el('div', { class: 'br-title',
+              text: C.roundName(round.ties.length * 2, comp.name) }));
+            round.ties.forEach(tie => {
+              const box = el('div', { class: 'br-tie' });
+              [[tie.home, tie.hg], [tie.away, tie.ag]].forEach(([cid, g]) => {
+                const c = FCM.DB.clubById[cid];
+                const won = tie.winner === cid;
+                const row = el('div', { class: 'br-team ' +
+                  (tie.played ? (won ? 'won' : 'lost') : '') });
+                row.appendChild(el('span', { text: c ? c.name.slice(0, 20) : '—',
+                  style: cid === club.id ? 'color:var(--accent)' : '' }));
+                row.appendChild(el('span', { class: 'mono', text: tie.played ? g : '' }));
+                box.appendChild(row);
+              });
+              if (tie.pens) box.appendChild(el('div', { class: 'tiny mute2',
+                text: 'Pens ' + tie.pens.home + '–' + tie.pens.away }));
+              col.appendChild(box);
+            });
+            br.appendChild(col);
+          });
+          body.appendChild(br);
+          if (comp.winner) {
+            body.appendChild(el('div', { class: 'row', style: 'margin-top:10px;gap:8px' }, [
+              el('span', { text: '🏆' }),
+              el('b', { text: FCM.DB.clubById[comp.winner].name + ' win the ' + comp.name })
+            ]));
+          }
+          body.appendChild(el('div', { class: 'section-title', text: 'League phase' }));
+        }
         const rows = C.buildTable(comp.leaguePhase.clubs, comp.leaguePhase.fixtures,
           { nameOf: id => (FCM.DB.clubById[id] || {}).name || '' });
         const cols = [

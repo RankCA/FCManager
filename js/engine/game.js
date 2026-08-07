@@ -250,7 +250,16 @@
     const s = G.state, rng = G.rng;
     const q = G.qualifiers();
     const leagueDates = [78, 99, 120, 141, 169, 190, 211, 232];
-    const koDates = { r16: 253, qf: 281, sf: 302, final: 330 };
+    // Ordered, because drawRound indexes dates by round number. This was an
+    // object keyed r16/qf/sf/final, so every knockout date read undefined.
+    // Each competition gets its own knockout dates. Sharing them meant
+    // resolveClashes shunted ties between competitions and could leave a
+    // round sitting on a day that had already gone.
+    const koDatesFor = {
+      ucl: [253, 281, 302, 330],
+      uel: [255, 283, 304, 327],
+      uecl: [257, 285, 306, 324]
+    };
 
     [['ucl', 'UEFA Champions League', q.ucl, 36],
      ['uel', 'UEFA Europa League', q.uel, 36],
@@ -259,9 +268,9 @@
       if (entrants.length < 12) return;
       const comp = C.createContinental({
         id: 'euro:' + key, name: name, matchesEach: 8,
-        leagueDates: leagueDates, dates: koDates
+        leagueDates: leagueDates, dates: koDatesFor[key]
       }, entrants, s.season, rng);
-      comp.koDates = koDates;
+      comp.koDates = koDatesFor[key];
       s.competitions[comp.id] = comp;
     });
   };
@@ -281,6 +290,7 @@
       const c = G.state.competitions[id];
       if (c.fixtures) out.push.apply(out, c.fixtures);
       if (c.leaguePhase) out.push.apply(out, c.leaguePhase.fixtures);
+      if (c.type === 'continental' && c.fixtures) out.push.apply(out, c.fixtures);
       if (c.knockout) out.push.apply(out, c.knockout.fixtures);
     }
     return out;
@@ -312,6 +322,22 @@
     target = U.clamp(target + level.expectOffset, 1, n);
     // Whoever owns the club has the final say on what counts as success.
     target = U.clamp(FCM.OW.adjustTarget(s, club, target), 1, n);
+
+    // Success raises the bar. A manager who has just won the league four
+    // times running should not be asked to finish 20th - the target was
+    // derived from squad reputation alone and never moved.
+    const recent = (s.seasonHistory || []).slice(-4)
+      .filter(h => h.club === club.name);
+    if (recent.length) {
+      const best = Math.min.apply(null, recent.map(h => h.position));
+      const avg = U.mean(recent, h => h.position);
+      // Never demand less than they have actually been achieving.
+      target = Math.min(target, Math.round(avg), best + 1);
+      // Repeat winners are expected to keep winning.
+      const titles = recent.filter(h => h.position === 1).length;
+      if (titles >= 2) target = 1;
+      target = U.clamp(target, 1, n);
+    }
 
     const owner = FCM.OW.ownerOf(s, club);
     s.board.expectation = G.expectationText(target, league, n) +
@@ -493,6 +519,7 @@
 
     if (fixtures.length) {
       G.progressCups();
+      G.advanceContinental();
       G.reindexFixtures();
     }
 
@@ -545,6 +572,7 @@
     });
 
     G.progressCups();
+    G.advanceContinental();
     G.reindexFixtures();
     G.dailyUpkeep(result);
     s.day++;
@@ -705,6 +733,90 @@
         G.resolveClashes();
       } else {
         comp.winner = through[0];
+        if (comp.winner) G.onTrophy(comp, comp.winner);
+      }
+    }
+  };
+
+  /**
+   * Continental competitions: close the league phase when its last game is
+   * played, draw the top 16 into a bracket, then advance it like a cup.
+   * Nothing did this before, so the Champions League ran eight matchdays
+   * and simply stopped - no knockout, no winner, ever.
+   */
+  /**
+   * A knockout round drawn after its scheduled date would never be played -
+   * the fixture loop only runs games falling on today. Push any such tie to
+   * the next free slot instead of stranding the competition.
+   */
+  function scheduleFrom(comp, roundIdx, day) {
+    const round = comp.rounds[roundIdx];
+    if (!round) return;
+    round.ties.forEach(t => {
+      if (t.day === null || t.day === undefined || t.day <= day) t.day = day + 3;
+    });
+  }
+
+  G.advanceContinental = function () {
+    const s = G.state, rng = G.rng;
+    for (const id in s.competitions) {
+      const comp = s.competitions[id];
+      if (comp.type !== 'continental' || comp.winner) continue;
+
+      if (comp.phase === 'league') {
+        if (!comp.leaguePhase.fixtures.every(f => f.played)) continue;
+        const table = C.buildTable(comp.leaguePhase.clubs, comp.leaguePhase.fixtures,
+          { nameOf: cid => (FCM.DB.clubById[cid] || {}).name || '' });
+        // Top 16 go through, seeded so the group winners are kept apart.
+        const through = table.slice(0, 16).map(r => r.club);
+        if (through.length < 2) { comp.phase = 'done'; continue; }
+        comp.qualified = through.slice();
+        comp.phase = 'knockout';
+        comp.dates = comp.koDates || [253, 281, 302, 330];
+        comp.fixtures = comp.fixtures || [];
+        comp.rounds = [];
+        C.drawRound(comp, through, 0, s.season, rng);
+        G.resolveClashes();
+        scheduleFrom(comp, 0, s.day);
+        const mine = through.indexOf(s.userClubId) >= 0;
+        G.news(comp.name + ' knockout stage',
+          'The league phase is over. ' + through.length + ' clubs go through' +
+          (mine ? ', and we are among them.' : '.'), mine ? 'trophy' : 'info');
+        continue;
+      }
+
+      if (comp.phase !== 'knockout') continue;
+      const round = comp.rounds[comp.rounds.length - 1];
+      if (!round) continue;
+      if (!round.ties.every(t => t.played)) continue;
+
+      round.ties.forEach(t => {
+        if (t.winner) return;
+        if (t.hg > t.ag) t.winner = t.home;
+        else if (t.ag > t.hg) t.winner = t.away;
+        else {
+          const pens = M.penalties(G.tacticsFor(FCM.DB.clubById[t.home]),
+            G.tacticsFor(FCM.DB.clubById[t.away]), FCM.DB.byId, rng);
+          t.pens = pens;
+          t.winner = pens.home > pens.away ? t.home : t.away;
+        }
+      });
+
+      const through = C.roundWinners(comp, comp.rounds.length - 1);
+      if (through.length <= 1) {
+        comp.winner = through[0] || null;
+        comp.phase = 'done';
+        if (comp.winner) G.onTrophy(comp, comp.winner);
+        continue;
+      }
+      const nextIdx = comp.rounds.length;
+      if (nextIdx < comp.dates.length) {
+        C.drawRound(comp, through, nextIdx, s.season, rng);
+        G.resolveClashes();
+        scheduleFrom(comp, nextIdx, s.day);
+      } else {
+        comp.winner = through[0];
+        comp.phase = 'done';
         if (comp.winner) G.onTrophy(comp, comp.winner);
       }
     }
@@ -897,9 +1009,17 @@
     const s = G.state, rng = G.rng;
     if (!s.scouting) s.scouting = { missions: [], found: [] };
     const club = FCM.DB.clubById[s.userClubId];
-    const done = s.scouting.missions.filter(m => s.day >= m.returnsDay);
+    // A mission booked late in one season had a returnsDay the next season
+    // could never reach, so it renewed forever. Age them in days elapsed.
+    s.scouting.missions.forEach(m => {
+      if (m.daysLeft === undefined) {
+        m.daysLeft = Math.max(0, (m.returnsDay || 0) - s.day);
+      }
+      m.daysLeft = Math.max(0, m.daysLeft - 1);
+    });
+    const done = s.scouting.missions.filter(m => m.daysLeft <= 0);
     if (!done.length) return;
-    s.scouting.missions = s.scouting.missions.filter(m => s.day < m.returnsDay);
+    s.scouting.missions = s.scouting.missions.filter(m => m.daysLeft > 0);
 
     done.forEach(m => {
       // A hired chief scout finds better prospects than the club default.
@@ -1476,7 +1596,10 @@
       // and the group table stops occupying the Home tab for four months.
       if (!q.complete && FCM.IN.qualifyingDone(q)) {
         FCM.IN.finaliseQualifying(q);
-        if (cr.nation) {
+        // Morocco is not in the CONCACAF campaign and should never be told
+        // it failed to qualify for the Gold Cup.
+        const involved = cr.nation && !!FCM.IN.qualifyingGroupOf(q, cr.nation);
+        if (involved) {
           const through = (FCM.IN.qualifiedNations(q) || []).indexOf(cr.nation) >= 0;
           G.news(through
             ? cr.nation + ' have qualified for the ' + q.name

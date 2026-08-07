@@ -492,7 +492,12 @@ FCM.G.state = { tactics: {} };
 
     // Play it out and check the field comes out the right size.
     const qrng = new FCM.RNG(3);
+    assert(!IN.qualifyingDone(q), t.name + ': not finished before a ball is kicked');
     IN.BREAK_DAYS.forEach(d => IN.tickQualifying(q, d, qrng));
+    // The campaign has to read as finished the moment the last game is
+    // played, or its group table sits on the Home tab for months with
+    // nothing left to play for.
+    assert(IN.qualifyingDone(q), t.name + ': finished once every game is played');
     IN.finaliseQualifying(q);
     const through = IN.qualifiedNations(q);
     assert(through && through.length === t.teams, t.name + ': qualifying fills the field',

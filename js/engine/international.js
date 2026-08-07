@@ -382,6 +382,12 @@
     return q;
   };
 
+  /** Has every qualifier been played? */
+  IN.qualifyingDone = function (q) {
+    if (!q) return false;
+    return q.campaigns.every(c => c.fixtures.every(f => f.played));
+  };
+
   /** Everyone who came through a finished campaign. */
   IN.qualifiedNations = function (q) {
     if (!q) return null;

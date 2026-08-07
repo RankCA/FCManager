@@ -259,7 +259,9 @@ academy, staff, stadium, records and awards.
   places where a confederation still has places to fill. Places are
   apportioned so they sum to the field exactly. Fields are no longer just
   the world rankings — in testing both Germany and Portugal missed a World
-  Cup. Your own campaign sits on the Home tab with the live group table
+  Cup. Your own campaign sits on the Home tab with the live group table,
+  and clears away the moment your last qualifier is played — you find out in
+  November whether you are going, not the following June
 - Tournaments **play out across the summer on your Home tab** — seeded groups
   of four with live tables over three matchdays, then a full knockout bracket
   you can follow round by round. Your nation is highlighted throughout, and

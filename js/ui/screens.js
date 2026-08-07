@@ -308,15 +308,16 @@
       const found = FCM.IN.qualifyingGroupOf(q, cr.nation);
       if (!found) return;
       const table = FCM.IN.qualifyingTable(found.campaign, found.group);
-      const played = found.campaign.fixtures.filter(f => f.played).length;
-      const total = found.campaign.fixtures.length;
+      // Progress through your own group, which is what you actually follow.
+      const mineAll = found.campaign.fixtures.filter(f =>
+        found.group.teams.indexOf(f.home) >= 0 && found.group.teams.indexOf(f.away) >= 0);
+      const minePlayed = mineAll.filter(f => f.played).length;
 
       const body = el('div');
       body.appendChild(el('div', { class: 'tiny mute2', style: 'margin-bottom:8px',
         text: found.campaign.places + ' of ' + found.campaign.groups.length +
-          ' groups qualify · matchday ' +
-          Math.min(FCM.IN.BREAK_DAYS.length, Math.ceil(played / Math.max(1, total /
-            FCM.IN.BREAK_DAYS.length))) }));
+          ' groups qualify · ' + minePlayed + ' of ' + mineAll.length +
+          ' group games played' }));
 
       const box = el('div', { class: 'group-box' });
       table.forEach((r, i) => {

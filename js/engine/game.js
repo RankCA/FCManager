@@ -1452,6 +1452,25 @@
     const cr = FCM.CR.ensure(s);
     s.qualifying.forEach(q => {
       const played = FCM.IN.tickQualifying(q, s.day, rng);
+
+      // Settle the campaign the moment its last game is played rather than
+      // waiting for June. You find out in November whether you are going,
+      // and the group table stops occupying the Home tab for four months.
+      if (!q.complete && FCM.IN.qualifyingDone(q)) {
+        FCM.IN.finaliseQualifying(q);
+        if (cr.nation) {
+          const through = (FCM.IN.qualifiedNations(q) || []).indexOf(cr.nation) >= 0;
+          G.news(through
+            ? cr.nation + ' have qualified for the ' + q.name
+            : cr.nation + ' have failed to qualify for the ' + q.name,
+            through
+              ? 'Qualifying is over and we are going. The draw is made in the summer.'
+              : 'Qualifying is over and we did not make it. There is nothing to ' +
+                'play for now until the next campaign.',
+            through ? 'trophy' : 'board');
+        }
+      }
+
       if (!played || !cr.nation) return;
       played.forEach(f => {
         if (f.home !== cr.nation && f.away !== cr.nation) return;

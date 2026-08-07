@@ -3,7 +3,7 @@
 (function (FCM) {
   'use strict';
 
-  FCM.VERSION = '2.3.0';
+  FCM.VERSION = '2.4.0';
   FCM.BUILD = '2026-08-06';
   FCM.SAVE_FORMAT = 3;
 

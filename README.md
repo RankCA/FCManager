@@ -126,6 +126,21 @@ academy, staff, stadium, records and awards.
 - Individual programmes per player (shooting, passing, pace…), which work
   fastest on under-23s
 
+**Club takeovers**
+- Clubs change hands over the summer — yours and everyone else's — and a new
+  owner can rewrite the job overnight
+- Six archetypes with genuinely different consequences: a **sugar daddy**
+  multiplies your budget four and a half times and expects you to win almost
+  everything almost immediately; a **cost-cutter** slashes it to 40% but
+  understands what that means and gives you time; **fan ownership** has
+  modest money and enormous patience; a **development project** upgrades the
+  academy and judges you on the players you produce, not the table
+- Ownership moves both the board's target *and* how far confidence can fall
+  before you are sacked — 34% under a sugar daddy, 14% under supporter
+  ownership
+- It happens to rivals too, which is how a mid-table club becomes a problem
+  in the space of one summer
+
 **Opposition reports**
 - A dossier on your next opponent from the next-match card: their likely XI
   read from their *actual* tactics, their form, and their attack, midfield

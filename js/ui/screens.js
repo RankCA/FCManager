@@ -169,7 +169,8 @@
         s.board.confidence < 35 ? 'bad' : (s.board.confidence < 60 ? 'warn' : '')));
       if (FCM.D.underPressure(s)) {
         boardBody.appendChild(el('div', { class: 'tiny', style: 'color:var(--red);margin-top:7px',
-          text: '⚠ Your job is under threat. They sack below ' + level.sackAt + '%.' }));
+          text: '⚠ Your job is under threat. They sack below ' +
+            Math.round(FCM.D.sackFloor(s)) + '%.' }));
       }
     }
     right.appendChild(UI.card('The Board', boardBody));
@@ -4064,6 +4065,7 @@
      ['Squad size', squad.length],
      ['Average rating', Math.round(U.mean(squad, p => p.ovr))],
      ['Transfer budget', U.money(club.transferBudget)],
+     ['Ownership', FCM.OW.ownerOf(S(), club).label],
      ['Reputation', Math.round(club.rep) + '/100']].forEach(([k, v]) => {
       kv.appendChild(el('div', { class: 'k', text: k }));
       kv.appendChild(el('div', { class: 'v', text: v }));

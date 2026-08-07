@@ -21,7 +21,7 @@
    'js/core/util.js', 'js/core/names.js',
    'js/engine/player.js', 'js/engine/tactics.js', 'js/engine/match.js',
    'js/engine/youth.js', 'js/engine/finance.js', 'js/engine/morale.js',
-   'js/engine/training.js', 'js/engine/manmgmt.js', 'js/engine/scouting.js',
+   'js/engine/difficulty.js', 'js/engine/training.js', 'js/engine/manmgmt.js', 'js/engine/scouting.js', 'js/engine/owners.js',
    'js/engine/nations.js',
    'js/engine/international.js',
    'js/data/db-clubs.js', 'js/data/db-nations.js', 'js/data/db-names.js',
@@ -636,6 +636,60 @@ assert(reverse.xiRating > reverse.ourXiRating,
 FCM.G.state = null;
 delete FCM.G.tacticsFor;
 delete FCM.G.leagueTable;
+
+// ------------------------------------------------------------- ownership
+h2('17. Club takeovers');
+const OW = FCM.OW;
+const owClub = DB.clubs.find(c => c.name === 'Everton');
+const baseBudget = owClub.transferBudget, baseRep = owClub.rep;
+const owState = { season: 2025, day: 5, owners: {}, userClubId: owClub.id,
+  difficulty: 'normal', daysInJob: 999, board: { confidence: 30 } };
+
+assert(OW.ownerOf(owState, owClub).id === 'steady',
+  'clubs start under a steady custodian');
+
+// Each archetype has to produce a materially different job.
+const results = {};
+['sugar', 'frugal', 'romantic', 'academy', 'ambitious'].forEach(id => {
+  const c = Object.assign({}, owClub);
+  const st = { season: 2025, day: 5, owners: {}, userClubId: c.id,
+    difficulty: 'normal', daysInJob: 999, board: { confidence: 30 } };
+  OW.takeover(st, c, new FCM.RNG(1), id);
+  results[id] = { budget: c.transferBudget / baseBudget,
+    target: OW.adjustTarget(st, c, 10), patience: OW.patience(st, c) };
+});
+log('  ' + Object.keys(results).map(k =>
+  k + ' ×' + results[k].budget.toFixed(2) + ' budget, target ' + results[k].target).join('  ·  '), 'dim');
+assert(results.sugar.budget > 3, 'a sugar daddy multiplies the budget',
+  '×' + results.sugar.budget.toFixed(1));
+assert(results.frugal.budget < 0.6, 'a cost-cutter slashes it',
+  '×' + results.frugal.budget.toFixed(2));
+assert(results.sugar.target < results.frugal.target,
+  'big money means a harder target',
+  results.sugar.target + ' v ' + results.frugal.target);
+assert(results.romantic.patience > results.sugar.patience,
+  'fan ownership is more patient than a sugar daddy');
+
+// Patience has to move the actual sack threshold, or it is decoration.
+const impatient = { season: 2025, day: 5, owners: {}, userClubId: owClub.id,
+  difficulty: 'normal', daysInJob: 999, board: { confidence: 30 } };
+const patient = { season: 2025, day: 5, owners: {}, userClubId: owClub.id,
+  difficulty: 'normal', daysInJob: 999, board: { confidence: 30 } };
+OW.takeover(impatient, Object.assign({}, owClub), new FCM.RNG(2), 'sugar');
+OW.takeover(patient, Object.assign({}, owClub), new FCM.RNG(2), 'romantic');
+assert(FCM.D.sackFloor(impatient) > FCM.D.sackFloor(patient),
+  'an impatient owner sacks you sooner',
+  Math.round(FCM.D.sackFloor(impatient)) + '% v ' + Math.round(FCM.D.sackFloor(patient)) + '%');
+
+// A club cannot be sold twice in one season.
+const twice = { season: 2025, day: 5, owners: {}, userClubId: owClub.id };
+const c1 = Object.assign({}, owClub);
+assert(!!OW.takeover(twice, c1, new FCM.RNG(3), 'steady'), 'first sale goes through');
+assert(OW.takeover(twice, c1, new FCM.RNG(3), 'sugar') === null,
+  'a second sale in the same season is refused');
+
+// Restore the shared club object the later sections read.
+owClub.transferBudget = baseBudget; owClub.rep = baseRep;
 
 h2(fails === 0 ? 'ALL TESTS PASSED' : fails + ' TEST(S) FAILED');
 document.title = fails === 0 ? 'PASS' : 'FAIL(' + fails + ')';

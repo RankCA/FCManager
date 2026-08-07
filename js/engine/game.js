@@ -308,9 +308,13 @@
     else if (rank <= Math.ceil(n * 0.7)) target = Math.ceil(n * 0.55);
     else target = n - 3;
     target = U.clamp(target + level.expectOffset, 1, n);
+    // Whoever owns the club has the final say on what counts as success.
+    target = U.clamp(FCM.OW.adjustTarget(s, club, target), 1, n);
 
+    const owner = FCM.OW.ownerOf(s, club);
     s.board.expectation = G.expectationText(target, league, n) +
-      (s.difficulty === 'nightmare' ? ' They are not a patient board.' : '');
+      (s.difficulty === 'nightmare' ? ' They are not a patient board.' : '') +
+      (owner.id !== 'steady' ? ' (' + owner.label + ': ' + owner.blurb + ')' : '');
     s.board.targetPos = target;
   };
 
@@ -1674,7 +1678,14 @@
     s.seasonLog.push({ season: s.season - 1, history: s.history.slice() });
     G.setupSeason(false);
     G.startQualifying();
+    // Clubs change hands over the summer, which can rewrite your job.
+    const takeover = FCM.OW.seasonRoll(s, G.rng);
     G.setBoardExpectation();
+    if (takeover) {
+      const owner = FCM.OW.TYPES[takeover.type];
+      G.news('New owners at ' + FCM.DB.clubById[s.userClubId].name,
+        owner.label + '. ' + owner.pitch, 'board', { type: 'takeover' });
+    }
     FCM.AW.resetRivals();
     FCM.AW.resetMonthly();
     s.objectives = FCM.AW.generateObjectives(s, FCM.DB.clubById[s.userClubId],

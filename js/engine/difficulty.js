@@ -103,18 +103,35 @@
   };
 
   /** Are we out of a job? */
-  D.checkSacking = function (state) {
+  /**
+   * The confidence floor below which you lose the job, adjusted for who
+   * owns the club: a supporter-owned board rides out a bad run that a
+   * hedge fund would sack you over.
+   */
+  function sackFloor(state) {
     const level = D.get(state.difficulty);
-    if (level.sackAt < 0) return false;
-    if (state.daysInJob < level.graceDays) return false;
-    return state.board.confidence <= level.sackAt;
+    if (level.sackAt < 0) return -1;
+    const club = FCM.DB.clubById[state.userClubId];
+    const patience = (FCM.OW && club) ? FCM.OW.patience(state, club) : 1;
+    // More patience means they tolerate a lower confidence before acting.
+    return U.clamp(level.sackAt / patience, 2, 60);
+  }
+  D.sackFloor = sackFloor;
+
+  D.checkSacking = function (state) {
+    const floor = sackFloor(state);
+    if (floor < 0) return false;
+    const level = D.get(state.difficulty);
+    if (state.daysInJob < level.graceDays * ((FCM.OW && FCM.DB.clubById[state.userClubId])
+      ? FCM.OW.patience(state, FCM.DB.clubById[state.userClubId]) : 1)) return false;
+    return state.board.confidence <= floor;
   };
 
   /** Warning band just above the sack threshold. */
   D.underPressure = function (state) {
-    const level = D.get(state.difficulty);
-    if (level.sackAt < 0) return false;
-    return state.board.confidence <= level.sackAt + 14;
+    const floor = sackFloor(state);
+    if (floor < 0) return false;
+    return state.board.confidence <= floor + 14;
   };
 
   FCM.D = D;
